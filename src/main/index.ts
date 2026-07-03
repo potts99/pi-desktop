@@ -10,12 +10,27 @@ function createWindow(): void {
     width: 1280, height: 820, show: true, titleBarStyle: "hiddenInset",
     vibrancy: "sidebar", visualEffectState: "active",
     webPreferences: {
-      preload: join(import.meta.dirname, "../preload/index.mjs"),
+      preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true, nodeIntegration: false,
     },
   });
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+  // Mirror renderer console + load failures to the terminal for debugging.
+  win.webContents.on("console-message", (_e, level, message, line, source) => {
+    console.log(`[renderer:${level}] ${message} (${source}:${line})`);
+  });
+  win.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    console.log(`[renderer] did-fail-load ${code} ${desc} ${url}`);
+  });
+  win.webContents.on("render-process-gone", (_e, details) => {
+    console.log(`[renderer] process gone: ${details.reason}`);
+  });
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    win.loadURL(process.env.ELECTRON_RENDERER_URL);
+    win.webContents.openDevTools({ mode: "detach" });
+  } else {
+    win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+  }
   win.on("close", (e) => { e.preventDefault(); win?.hide(); }); // hide, don't destroy
 }
 

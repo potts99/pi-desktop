@@ -11,7 +11,15 @@ export default defineConfig({
       },
     },
   },
-  preload: {},
+  preload: {
+    build: {
+      // Sandboxed preload must be CommonJS; this package is "type: module",
+      // so force a .cjs output instead of the default .mjs.
+      rollupOptions: {
+        output: { format: "cjs", entryFileNames: "index.cjs" },
+      },
+    },
+  },
   renderer: {
     root: "src/renderer",
     build: {
