@@ -13,22 +13,27 @@ export function InputBar({
   const [text, setText] = useState("");
   const submit = () => { if (text.trim()) { onSend(text.trim()); setText(""); } };
   return (
-    <div className="inputbar">
-      <textarea
-        value={text}
-        placeholder={disabled ? "Open or create a session…" : "Send a message…"}
-        disabled={disabled}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || !e.shiftKey)) { e.preventDefault(); submit(); } }}
-      />
-      <div className="inputbar-row">
-        <select
-          disabled={disabled || models.length === 0}
-          onChange={(e) => { const m = models[Number(e.target.value)]; if (m) onModel(m.provider, m.id); }}
-        >
-          {models.map((m, i) => <option key={`${m.provider}/${m.id}`} value={i}>{m.provider}/{m.id}</option>)}
-        </select>
-        <button disabled={disabled} onClick={submit}>{streaming ? "…" : "Send"}</button>
+    <div className="composer-wrap">
+      <div className="composer">
+        <textarea
+          value={text}
+          placeholder={disabled ? "Open or create an agent…" : "Send a message…"}
+          disabled={disabled}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || !e.shiftKey)) { e.preventDefault(); submit(); } }}
+        />
+        <div className="composer-row">
+          <select
+            className="model-picker"
+            disabled={disabled || models.length === 0}
+            onChange={(e) => { const m = models[Number(e.target.value)]; if (m) onModel(m.provider, m.id); }}
+          >
+            {models.map((m, i) => <option key={`${m.provider}/${m.id}`} value={i}>{m.provider}/{m.id}</option>)}
+          </select>
+          <button className="send-btn" disabled={disabled || streaming} onClick={submit}>
+            {streaming ? "…" : "Send"}
+          </button>
+        </div>
       </div>
     </div>
   );

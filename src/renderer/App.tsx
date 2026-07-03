@@ -10,12 +10,23 @@ export default function App() {
     <div className="app">
       <Sidebar
         groups={s.groups}
+        activePath={s.activePath}
         onAddWorkspace={s.addWorkspace}
         onOpen={(path) => s.openSession({ path })}
         onNew={(cwd) => s.openSession({ newIn: cwd })}
       />
       <div className="main-pane">
-        <Transcript messages={s.messages} />
+        <div className="topbar">
+          <span className="crumb">{s.activeTitle ?? ""}</span>
+        </div>
+        {s.activeKey ? (
+          <Transcript messages={s.messages} />
+        ) : (
+          <div className="empty-state">
+            <div className="empty-title">pi</div>
+            <div className="empty-sub">Pick an agent on the left, or start a New Agent.</div>
+          </div>
+        )}
         <InputBar
           disabled={!s.activeKey}
           streaming={s.streaming}

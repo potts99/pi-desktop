@@ -8,7 +8,7 @@ let tray: Tray | null = null;
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280, height: 820, show: true, titleBarStyle: "hiddenInset",
-    vibrancy: "sidebar", visualEffectState: "active",
+    backgroundColor: "#ffffff", // solid, not translucent — matches Cursor
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true, nodeIntegration: false,

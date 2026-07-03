@@ -4,6 +4,7 @@ import type { TranscriptMessage, WorkspaceGroup, ModelChoice } from "../../share
 export function useSessions() {
   const [groups, setGroups] = useState<WorkspaceGroup[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [activePath, setActivePath] = useState<string | null>(null);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [models, setModels] = useState<ModelChoice[]>([]);
@@ -11,6 +12,7 @@ export function useSessions() {
   activeKeyRef.current = activeKey;
 
   const refreshWorkspaces = useCallback(async () => {
+    if (!window.pi) return; // preload not loaded (e.g. plain-browser preview) — render shell only
     const paths = await window.pi.listWorkspaces();
     const gs = await Promise.all(
       paths.map(async (p) => ({
@@ -24,10 +26,10 @@ export function useSessions() {
 
   useEffect(() => { refreshWorkspaces(); }, [refreshWorkspaces]);
 
-  useEffect(() => window.pi.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
+  useEffect(() => window.pi?.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
 
   useEffect(() =>
-    window.pi.onSessionEvent((key, ev) => {
+    window.pi?.onSessionEvent((key, ev) => {
       if (key !== activeKeyRef.current) return;
       if (ev.kind === "reset") { setMessages(ev.messages); setStreaming(false); }
       else if (ev.kind === "message") setMessages((m) => [...m, ev.message]);
@@ -50,19 +52,25 @@ export function useSessions() {
     }), []);
 
   const openSession = useCallback(async (arg: { path: string } | { newIn: string }) => {
+    if (!window.pi) return;
     const { sessionKey } = await window.pi.openSession(arg);
     setActiveKey(sessionKey);
+    setActivePath("path" in arg ? arg.path : null);
     setMessages([]);
     setModels(await window.pi.getModels(sessionKey).catch(() => []));
   }, []);
 
   const send = useCallback(async (text: string) => {
-    if (!activeKey) return;
+    if (!activeKey || !window.pi) return;
     setMessages((m) => [...m, { role: "user", blocks: [{ kind: "text", text }] }]);
     await window.pi.sendPrompt(activeKey, text);
   }, [activeKey]);
 
-  const addWorkspace = useCallback(async () => { await window.pi.addWorkspace(); refreshWorkspaces(); }, [refreshWorkspaces]);
+  const addWorkspace = useCallback(async () => { if (!window.pi) return; await window.pi.addWorkspace(); refreshWorkspaces(); }, [refreshWorkspaces]);
 
-  return { groups, activeKey, messages, streaming, models, openSession, send, addWorkspace };
+  const activeTitle = activePath
+    ? groups.flatMap((g) => g.sessions).find((s) => s.path === activePath)?.title ?? "Session"
+    : activeKey ? "New Agent" : null;
+
+  return { groups, activeKey, activePath, activeTitle, messages, streaming, models, openSession, send, addWorkspace };
 }
