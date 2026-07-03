@@ -15,9 +15,23 @@ workspace-switcher/search UI. This spec covers only the foundation those
 build on: the app shell, session sidebar, chat transcript, and pi
 integration.
 
-We are **not** decompiling or extracting Cursor's app bundle/source. The
-visual language (glassmorphism-adjacent, dense dashboard layout) is
-reimplemented from scratch based on observed behavior.
+We are **not** lifting Cursor's proprietary code. Its EULA (`LICENSE.txt`
+§1.3) forbids copying/adapting/decompiling, and the Agents Window
+(`workbench.glass.main.js` — "glass" is Cursor's internal codename for it)
+is a minified bundle of a whole VS Code fork wired to Cursor's own
+auth/backend/agent protocol, so extracting it would be more work than a
+clean build, not less. All shipped code is our own.
+
+## Design reference
+
+To avoid guessing the visual language, exact design tokens are mined from
+Cursor's shipped stylesheet at
+`/Applications/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.glass.main.css`
+(colors, `backdrop-filter` blur/saturate values, border radii, spacing,
+and layout structure). These are read as reference for fidelity; none of
+Cursor's code is copied into this project. The `.glass-<hash>` class naming
+indicates Emotion/CSS-in-JS, confirming a React frontend — our
+reimplementation targets the same look with our own components.
 
 ## Why pi fits this shape
 
