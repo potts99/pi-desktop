@@ -32,8 +32,8 @@ export interface ModelChoice {
 }
 
 // Events pushed main -> renderer for an open session.
+// (Initial history is returned synchronously from openSession, not via an event.)
 export type SessionEvent =
-  | { kind: "reset"; messages: TranscriptMessage[] }   // full history on open
   | { kind: "assistantDelta"; text: string }           // streamed text
   | { kind: "message"; message: TranscriptMessage }    // a completed message
   | { kind: "idle" }                                   // agent_end
@@ -43,7 +43,7 @@ export interface Api {
   listWorkspaces(): Promise<string[]>;
   addWorkspace(): Promise<string[]>;                    // opens folder picker, returns new list
   listSessions(workspacePath: string): Promise<SessionRow[]>;
-  openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string }>;
+  openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[] }>;
   closeSession(sessionKey: string): Promise<void>;
   sendPrompt(sessionKey: string, text: string): Promise<void>;
   getModels(sessionKey: string): Promise<ModelChoice[]>;

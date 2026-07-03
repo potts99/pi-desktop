@@ -37,8 +37,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return listSessions(cwd);
   });
 
-  ipcMain.handle("openSession", (_e, arg) =>
-    rt.openSession(arg, emit).then((sessionKey) => ({ sessionKey })));
+  ipcMain.handle("openSession", (_e, arg) => rt.openSession(arg, emit));
   ipcMain.handle("closeSession", (_e, key: string) => rt.closeSession(key));
   ipcMain.handle("sendPrompt", (_e, key: string, text: string) => rt.sendPrompt(key, text));
   ipcMain.handle("getModels", (_e, key: string) => rt.getModels(key));

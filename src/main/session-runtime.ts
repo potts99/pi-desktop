@@ -38,7 +38,7 @@ function toBlocks(msg: AgentMessage): TranscriptMessage | null {
 export async function openSession(
   arg: { path: string } | { newIn: string },
   emit: (sessionKey: string, ev: SessionEvent) => void,
-): Promise<string> {
+): Promise<{ sessionKey: string; messages: TranscriptMessage[] }> {
   const cwd = "path" in arg ? undefined : arg.newIn;
   const args = "path" in arg ? ["--session", arg.path] : [];
   const client = new RpcClient({ cliPath, cwd, args });
@@ -59,16 +59,14 @@ export async function openSession(
     }
   });
 
-  // Replay existing history for resumed sessions.
-  if ("path" in arg) {
-    const msgs = await client.getMessages().catch(() => [] as AgentMessage[]);
-    const history = msgs.map(toBlocks).filter((m): m is TranscriptMessage => m !== null);
-    emit(sessionKey, { kind: "reset", messages: history });
-  } else {
-    emit(sessionKey, { kind: "reset", messages: [] });
-  }
+  // Return existing history synchronously so the renderer applies it the moment
+  // the session becomes active — avoids a race with the live-event key guard.
+  const history = "path" in arg
+    ? (await client.getMessages().catch(() => [] as AgentMessage[]))
+        .map(toBlocks).filter((m): m is TranscriptMessage => m !== null)
+    : [];
 
-  return sessionKey;
+  return { sessionKey, messages: history };
 }
 
 export async function closeSession(sessionKey: string): Promise<void> {

@@ -36,8 +36,7 @@ export function useSessions() {
   useEffect(() =>
     window.pi?.onSessionEvent((key, ev) => {
       if (key !== activeKeyRef.current) return;
-      if (ev.kind === "reset") { setMessages(ev.messages); setStreamingText(""); setStreaming(false); }
-      else if (ev.kind === "message") {
+      if (ev.kind === "message") {
         setMessages((m) => [...m, ev.message]);
         if (ev.message.role === "assistant") setStreamingText(""); // final text has landed
       }
@@ -48,10 +47,12 @@ export function useSessions() {
 
   const openSession = useCallback(async (arg: { path: string } | { newIn: string }) => {
     if (!window.pi) return;
-    const { sessionKey } = await window.pi.openSession(arg);
+    const { sessionKey, messages: history } = await window.pi.openSession(arg);
     setActiveKey(sessionKey);
     setActivePath("path" in arg ? arg.path : null);
-    setMessages([]);
+    setMessages(history);       // full history applied synchronously
+    setStreamingText("");
+    setStreaming(false);
     setModels(await window.pi.getModels(sessionKey).catch(() => []));
   }, []);
 
