@@ -6,6 +6,7 @@ export function useSessions() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
+  const [streamingText, setStreamingText] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [models, setModels] = useState<ModelChoice[]>([]);
   const activeKeyRef = useRef<string | null>(null);
@@ -28,27 +29,21 @@ export function useSessions() {
 
   useEffect(() => window.pi?.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
 
+  // message_end (kind "message") is the single source of truth for committed
+  // messages — pi emits it for user, assistant, and tool messages alike. The
+  // text deltas only feed a transient streaming preview, so nothing is ever
+  // rendered twice.
   useEffect(() =>
     window.pi?.onSessionEvent((key, ev) => {
       if (key !== activeKeyRef.current) return;
-      if (ev.kind === "reset") { setMessages(ev.messages); setStreaming(false); }
-      else if (ev.kind === "message") setMessages((m) => [...m, ev.message]);
-      else if (ev.kind === "assistantDelta") {
-        setStreaming(true);
-        setMessages((m) => {
-          const last = m[m.length - 1];
-          if (last?.role === "assistant" && last.blocks[0]?.kind === "text") {
-            const copy = m.slice();
-            copy[copy.length - 1] = {
-              role: "assistant",
-              blocks: [{ kind: "text", text: (last.blocks[0].text ?? "") + ev.text }],
-            };
-            return copy;
-          }
-          return [...m, { role: "assistant", blocks: [{ kind: "text", text: ev.text }] }];
-        });
-      } else if (ev.kind === "idle") setStreaming(false);
-      else if (ev.kind === "error") setStreaming(false);
+      if (ev.kind === "reset") { setMessages(ev.messages); setStreamingText(""); setStreaming(false); }
+      else if (ev.kind === "message") {
+        setMessages((m) => [...m, ev.message]);
+        if (ev.message.role === "assistant") setStreamingText(""); // final text has landed
+      }
+      else if (ev.kind === "assistantDelta") { setStreaming(true); setStreamingText((t) => t + ev.text); }
+      else if (ev.kind === "idle") { setStreaming(false); setStreamingText(""); }
+      else if (ev.kind === "error") { setStreaming(false); setStreamingText(""); }
     }), []);
 
   const openSession = useCallback(async (arg: { path: string } | { newIn: string }) => {
@@ -62,7 +57,9 @@ export function useSessions() {
 
   const send = useCallback(async (text: string) => {
     if (!activeKey || !window.pi) return;
-    setMessages((m) => [...m, { role: "user", blocks: [{ kind: "text", text }] }]);
+    // No optimistic add — pi emits a message_end for the user prompt almost
+    // immediately, which is the authoritative copy (avoids duplicates).
+    setStreaming(true);
     await window.pi.sendPrompt(activeKey, text);
   }, [activeKey]);
 
@@ -72,5 +69,5 @@ export function useSessions() {
     ? groups.flatMap((g) => g.sessions).find((s) => s.path === activePath)?.title ?? "Session"
     : activeKey ? "New Agent" : null;
 
-  return { groups, activeKey, activePath, activeTitle, messages, streaming, models, openSession, send, addWorkspace };
+  return { groups, activeKey, activePath, activeTitle, messages, streamingText, streaming, models, openSession, send, addWorkspace };
 }

@@ -20,7 +20,7 @@ export default function App() {
           <span className="crumb">{s.activeTitle ?? ""}</span>
         </div>
         {s.activeKey ? (
-          <Transcript messages={s.messages} />
+          <Transcript messages={s.messages} streamingText={s.streamingText} />
         ) : (
           <div className="empty-state">
             <div className="empty-title">pi</div>
