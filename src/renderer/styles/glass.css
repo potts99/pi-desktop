@@ -1,0 +1,55 @@
+/* Tokens mined from Cursor's workbench.glass.main.css:
+   dominant radii 4-6px, panel blur 8-16px, black-translucent panels over
+   window vibrancy. Reference only — no Cursor code copied. */
+:root {
+  --glass-blur: blur(16px) saturate(1.1);
+  --panel: rgba(0, 0, 0, 0.2);
+  --panel-2: rgba(0, 0, 0, 0.4);
+  --stroke: rgba(255, 255, 255, 0.08);
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.5);
+  --radius: 6px;
+  --accent: rgba(120, 150, 255, 0.9);
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font: 13px -apple-system, system-ui, sans-serif; color: var(--text); background: transparent; }
+.app { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+.sidebar {
+  background: var(--panel); backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--stroke); overflow-y: auto; padding: 8px;
+  padding-top: 36px; /* clears macOS traffic lights (hiddenInset) */
+}
+.new-agent { width: 100%; padding: 8px; margin-bottom: 8px; border-radius: var(--radius);
+  border: 1px solid var(--stroke); background: var(--panel-2); color: var(--text); cursor: pointer; }
+.ws-group { margin-bottom: 12px; }
+.ws-head { display: flex; justify-content: space-between; align-items: center;
+  color: var(--muted); font-size: 11px; text-transform: uppercase; padding: 4px 6px; }
+.ws-new { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 11px; }
+.session-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; text-align: left; padding: 8px; border: none; background: none;
+  border-radius: var(--radius); color: var(--text); cursor: pointer; }
+.session-row:hover { background: var(--panel-2); }
+.s-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.s-sub { color: var(--muted); font-size: 11px; }
+.main-pane { display: grid; grid-template-rows: 1fr auto; height: 100vh; min-width: 0; }
+.transcript { overflow-y: auto; padding: 36px 24px 12px; }
+.msg { margin: 0 auto 16px; max-width: 760px; }
+.msg-user { color: var(--text); background: var(--panel-2); border-radius: var(--radius); padding: 10px 14px; }
+.msg-assistant :is(h1,h2,h3) { margin: 0.6em 0 0.3em; }
+.msg-assistant table { border-collapse: collapse; }
+.msg-assistant :is(th,td) { border: 1px solid var(--stroke); padding: 4px 8px; }
+.thinking { color: var(--muted); font-style: italic; white-space: pre-wrap; }
+.tool { background: var(--panel-2); border: 1px solid var(--stroke); border-radius: var(--radius); padding: 6px 10px; margin: 6px 0; }
+.tool-error { border-color: rgba(255, 90, 90, 0.5); }
+.tool pre { overflow-x: auto; white-space: pre-wrap; }
+.inputbar { border-top: 1px solid var(--stroke); background: var(--panel);
+  backdrop-filter: var(--glass-blur); padding: 12px; }
+.inputbar textarea { width: 100%; min-height: 56px; resize: vertical; border-radius: var(--radius);
+  border: 1px solid var(--stroke); background: var(--panel-2); color: var(--text); padding: 10px; font: inherit; }
+.inputbar-row { display: flex; justify-content: space-between; margin-top: 8px; }
+.inputbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--stroke);
+  border-radius: var(--radius); padding: 4px 8px; }
+.inputbar button { background: var(--accent); color: white; border: none;
+  border-radius: var(--radius); padding: 6px 16px; cursor: pointer; }
+.inputbar button:disabled { opacity: 0.5; cursor: default; }
