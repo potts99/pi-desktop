@@ -1,2 +1,3 @@
 import { createRoot } from "react-dom/client";
-createRoot(document.getElementById("root")!).render(<div>pi-desktop</div>);
+import App from "./App.tsx";
+createRoot(document.getElementById("root")!).render(<App />);
