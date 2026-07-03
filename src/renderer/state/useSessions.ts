@@ -50,7 +50,7 @@ export function useSessions() {
     const { sessionKey, messages: history } = await window.pi.openSession(arg);
     setActiveKey(sessionKey);
     setActivePath("path" in arg ? arg.path : null);
-    setMessages(history);       // full history applied synchronously
+    setMessages(history ?? []); // full history applied synchronously (guard against stale IPC shape)
     setStreamingText("");
     setStreaming(false);
     setModels(await window.pi.getModels(sessionKey).catch(() => []));
