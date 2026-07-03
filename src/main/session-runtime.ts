@@ -1,10 +1,12 @@
-import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { RpcClient } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ModelChoice, SessionEvent, TranscriptMessage, Block } from "../shared/types.ts";
 
-const require = createRequire(import.meta.url);
-const cliPath = require.resolve("@earendil-works/pi-coding-agent/dist/cli.js");
+// The package's "exports" only defines an ESM "import" condition, so resolve
+// via import.meta.resolve (ESM) — not require.resolve — then derive cli.js.
+const cliPath = join(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))), "cli.js");
 
 interface Entry { client: RpcClient; cwd: string; }
 const pool = new Map<string, Entry>();
