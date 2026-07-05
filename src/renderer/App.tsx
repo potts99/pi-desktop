@@ -84,6 +84,7 @@ export default function App() {
           streaming={s.streaming}
           models={s.models}
           mode={s.mode}
+          cwd={s.groups.find((g) => g.sessions.some((r) => r.path === s.activePath))?.path ?? null}
           thinkingLevel={s.thinkingLevel}
           thinkingLevels={s.thinkingLevels}
           queue={s.queue}

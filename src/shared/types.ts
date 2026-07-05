@@ -94,6 +94,7 @@ export interface Api {
   listWorkspaces(): Promise<string[]>;
   addWorkspace(): Promise<string[]>;                    // opens folder picker, returns new list
   listSessions(workspacePath: string): Promise<SessionRow[]>;
+  listWorkspaceFiles(cwd: string, prefix: string): Promise<string[]>;
   openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }>;
   closeSession(sessionKey: string): Promise<void>;
   sendPrompt(sessionKey: string, text: string, mode?: "prompt" | "steer" | "followUp"): Promise<void>;

@@ -5,6 +5,7 @@ const api: Api = {
   listWorkspaces: () => ipcRenderer.invoke("listWorkspaces"),
   addWorkspace: () => ipcRenderer.invoke("addWorkspace"),
   listSessions: (p) => ipcRenderer.invoke("listSessions", p),
+  listWorkspaceFiles: (cwd, prefix) => ipcRenderer.invoke("listWorkspaceFiles", cwd, prefix),
   openSession: (arg) => ipcRenderer.invoke("openSession", arg),
   closeSession: (k) => ipcRenderer.invoke("closeSession", k),
   sendPrompt: (k, t, mode) => ipcRenderer.invoke("sendPrompt", k, t, mode),

@@ -1,7 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import type { FSWatcher } from "node:fs";
 import { listWorkspaces, addWorkspace } from "./workspaces.ts";
-import { listSessions, sessionDirFor, watchDir } from "./sessions.ts";
+import { listSessions, listWorkspaceFiles, sessionDirFor, watchDir } from "./sessions.ts";
 import * as rt from "./session-runtime.ts";
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
@@ -55,6 +55,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("cloneSession", (_e, key: string) => rt.cloneSession(key));
   ipcMain.handle("renameSession", (_e, key: string, name: string) => rt.renameSession(key, name));
   ipcMain.handle("deleteSession", (_e, sessionPath: string) => rt.deleteSession(sessionPath));
+  ipcMain.handle("listWorkspaceFiles", (_e, cwd: string, prefix: string) => listWorkspaceFiles(cwd, prefix));
   ipcMain.handle("getLastAssistantText", (_e, key: string) => rt.getLastAssistantText(key));
   ipcMain.handle("closeWindow", () => { getWindow()?.close(); });
   ipcMain.handle("maximizeWindow", () => { getWindow()?.maximize(); });
