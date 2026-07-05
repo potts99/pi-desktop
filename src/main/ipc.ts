@@ -39,7 +39,25 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle("openSession", (_e, arg) => rt.openSession(arg, emit));
   ipcMain.handle("closeSession", (_e, key: string) => rt.closeSession(key));
-  ipcMain.handle("sendPrompt", (_e, key: string, text: string) => rt.sendPrompt(key, text));
+  ipcMain.handle("sendPrompt", (_e, key: string, text: string, mode?: "prompt" | "steer" | "followUp") => {
+    if (mode === "steer") return rt.steer(key, text);
+    if (mode === "followUp") return rt.followUp(key, text);
+    return rt.sendPrompt(key, text);
+  });
+  ipcMain.handle("abortSession", (_e, key: string) => rt.abortSession(key));
   ipcMain.handle("getModels", (_e, key: string) => rt.getModels(key));
   ipcMain.handle("setModel", (_e, key: string, provider: string, id: string) => rt.setModel(key, provider, id));
+  ipcMain.handle("getSessionState", (_e, key: string) => rt.getSessionState(key));
+  ipcMain.handle("setThinkingLevel", (_e, key: string, level) => rt.setThinkingLevel(key, level));
+  ipcMain.handle("cycleThinkingLevel", (_e, key: string) => rt.cycleThinkingLevel(key));
+  ipcMain.handle("forkSession", (_e, key: string, entryId: string) => rt.forkSession(key, entryId));
+  ipcMain.handle("cloneSession", (_e, key: string) => rt.cloneSession(key));
+  ipcMain.handle("renameSession", (_e, key: string, name: string) => rt.renameSession(key, name));
+  ipcMain.handle("deleteSession", (_e, sessionPath: string) => rt.deleteSession(sessionPath));
+  ipcMain.handle("getLastAssistantText", (_e, key: string) => rt.getLastAssistantText(key));
+  ipcMain.handle("closeWindow", () => { getWindow()?.close(); });
+  ipcMain.handle("maximizeWindow", () => { getWindow()?.maximize(); });
+  ipcMain.handle("minimizeWindow", () => { getWindow()?.minimize(); });
+  ipcMain.handle("unmaximizeWindow", () => { getWindow()?.unmaximize(); });
+  ipcMain.handle("isMaximized", () => getWindow()?.isMaximized() ?? false);
 }

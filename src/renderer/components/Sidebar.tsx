@@ -1,19 +1,19 @@
 import type { WorkspaceGroup } from "../../shared/types.ts";
 
 export function Sidebar({
-  groups, activePath, onAddWorkspace, onOpen, onNew,
+  groups, activePath, onNewAgent, onOpen, onNew,
 }: {
   groups: WorkspaceGroup[];
   activePath: string | null;
-  onAddWorkspace: () => void;
+  onNewAgent: () => void;
   onOpen: (path: string) => void;
   onNew: (cwd: string) => void;
 }) {
   return (
     <div className="sidebar">
       <div className="sidebar-top">
-        <button className="nav-item nav-primary" onClick={onAddWorkspace}>
-          <span className="nav-icon">✳</span>Add workspace
+        <button className="nav-item nav-primary" onClick={onNewAgent}>
+          <span className="nav-icon">+</span>New Agent
         </button>
       </div>
 

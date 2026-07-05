@@ -1,0 +1,22 @@
+advisors: 
+  - name: default
+    model: zai/glm-5.2:xhigh
+    tools: 
+      - read
+      - bash
+      - edit
+      - ast_grep
+      - ast_edit
+      - ask
+      - debug
+      - eval
+      - glob
+      - grep
+      - lsp
+      - task
+      - job
+      - irc
+      - todo
+      - web_search
+      - write
+    instructions: You are a senior product manager thats designed to use deepseek v4 as a worker in order to complete the set goal

@@ -22,6 +22,7 @@ export type Block =
   | { kind: "toolResult"; toolCallId: string; toolName: string; text: string; isError: boolean };
 
 export interface TranscriptMessage {
+  id?: string;
   role: "user" | "assistant" | "tool";
   blocks: Block[];
 }
@@ -31,23 +32,70 @@ export interface ModelChoice {
   id: string;
 }
 
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export interface QueueState {
+  steering: string[];
+  followUp: string[];
+}
+
+export interface RetryState {
+  active: boolean;
+  attempt?: number;
+  maxAttempts?: number;
+  delayMs?: number;
+  message?: string;
+}
+
+export interface SessionState {
+  sessionPath?: string;
+  thinkingLevel: ThinkingLevel;
+  isStreaming: boolean;
+  queue: QueueState;
+}
+
+export interface SessionReplacement {
+  cancelled: boolean;
+  sessionPath?: string;
+  messages: TranscriptMessage[];
+  thinkingLevel: ThinkingLevel;
+}
+
 // Events pushed main -> renderer for an open session.
 // (Initial history is returned synchronously from openSession, not via an event.)
 export type SessionEvent =
   | { kind: "assistantDelta"; text: string }           // streamed text
   | { kind: "message"; message: TranscriptMessage }    // a completed message
   | { kind: "idle" }                                   // agent_end
+  | { kind: "queue"; queue: QueueState }
+  | { kind: "retry"; retry: RetryState }
+  | { kind: "sessionState"; state: Partial<SessionState> }
   | { kind: "error"; message: string };
 
 export interface Api {
   listWorkspaces(): Promise<string[]>;
   addWorkspace(): Promise<string[]>;                    // opens folder picker, returns new list
   listSessions(workspacePath: string): Promise<SessionRow[]>;
-  openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[] }>;
+  openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }>;
   closeSession(sessionKey: string): Promise<void>;
-  sendPrompt(sessionKey: string, text: string): Promise<void>;
+  sendPrompt(sessionKey: string, text: string, mode?: "prompt" | "steer" | "followUp"): Promise<void>;
+  abortSession(sessionKey: string): Promise<void>;
   getModels(sessionKey: string): Promise<ModelChoice[]>;
   setModel(sessionKey: string, provider: string, id: string): Promise<void>;
+  getSessionState(sessionKey: string): Promise<SessionState>;
+  setThinkingLevel(sessionKey: string, level: ThinkingLevel): Promise<ThinkingLevel>;
+  cycleThinkingLevel(sessionKey: string): Promise<ThinkingLevel | null>;
+  forkSession(sessionKey: string, entryId: string): Promise<SessionReplacement>;
+  cloneSession(sessionKey: string): Promise<SessionReplacement>;
+  renameSession(sessionKey: string, name: string): Promise<void>;
+  deleteSession(sessionPath: string): Promise<void>;
+  getLastAssistantText(sessionKey: string): Promise<string | null>;
+  // window controls
+  closeWindow(): Promise<void>;
+  maximizeWindow(): Promise<void>;
+  minimizeWindow(): Promise<void>;
+  unmaximizeWindow(): Promise<void>;
+  isMaximized(): Promise<boolean>;
   onSessionEvent(cb: (sessionKey: string, ev: SessionEvent) => void): () => void;
   onSessionsChanged(cb: (workspacePath: string) => void): () => void;
 }
