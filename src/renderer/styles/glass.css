@@ -258,6 +258,13 @@ button { font-family: inherit; }
 .who-name { font-size: 12.5px; color: var(--cursor-text-primary); font-weight: 500; }
 .who-plan { font-size: 11px; color: var(--cursor-text-tertiary); }
 
+.sidebar-settings-btn {
+  border: none; background: none; color: var(--cursor-text-quaternary);
+  font-size: 15px; cursor: pointer; padding: 4px 6px; border-radius: 4px;
+  margin-left: auto; line-height: 1;
+}
+.sidebar-settings-btn:hover { background: var(--cursor-bg-hover); color: var(--cursor-text-primary); }
+
 /* ── Main pane ── */
 .main-pane { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; min-width: 0; background: var(--cursor-bg); }
 .topbar { height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px 0 88px;

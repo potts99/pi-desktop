@@ -92,6 +92,7 @@ export default function App() {
           onOpen={(path) => s.openSession({ path })}
           onNew={(cwd) => s.openSession({ newIn: cwd })}
           onTogglePin={togglePin}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
       <div className="main-pane">
@@ -110,7 +111,6 @@ export default function App() {
             </span>
           )}
           <div className="top-actions">
-            <button onClick={() => setSettingsOpen(true)} title="Settings (\u2318,)" className="settings-gear">⚙</button>
             {!sidebarOpen && (
               <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
             )}
