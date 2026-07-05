@@ -1,0 +1,14 @@
+appId: works.earendil.pi-desktop
+productName: pi-desktop
+directories:
+  output: release
+# electron-vite emits everything under out/; production deps are bundled automatically.
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - node_modules/**/*
+mac:
+  category: public.app-category.developer-tools
+  target: dir            # unpacked .app — fast; drag/copy into /Applications
+  # ponytail: unsigned local build. Add identity + notarize when distributing beyond this machine.

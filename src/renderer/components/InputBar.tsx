@@ -1,7 +1,8 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import type { AgentMode, ModelChoice, QueueState, ThinkingLevel } from "../../shared/types.ts";
 
 const modes: AgentMode[] = ["normal", "agent", "yolo", "manual"];
+const maxTextareaHeight = 240;
 
 interface SlashCommand {
   id: string;
@@ -88,6 +89,18 @@ export function InputBar({
   const [text, setText] = useState("");
   const [streamMode, setStreamMode] = useState<"steer" | "followUp">("steer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustTextareaHeight = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, maxTextareaHeight)}px`;
+    ta.style.overflowY = ta.scrollHeight > maxTextareaHeight ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [text, adjustTextareaHeight]);
 
   // Slash command state
   const [slashActive, setSlashActive] = useState(false);
@@ -232,12 +245,15 @@ export function InputBar({
     if (text.trim()) {
       onSend(text.trim(), streaming ? streamMode : "prompt");
       setText("");
+      requestAnimationFrame(adjustTextareaHeight);
       closeSlash();
       closeMention();
     }
   };
 
   const pendingCount = queue.steering.length + queue.followUp.length;
+  const canSubmit = !disabled && text.trim().length > 0;
+  const showStop = streaming && !text.trim();
 
   return (
     <div className="composer-wrap">
@@ -252,7 +268,8 @@ export function InputBar({
           <textarea
             ref={textareaRef}
             value={text}
-            placeholder={disabled ? "Open or create an agent…" : "Send a message…"}
+            rows={1}
+            placeholder={disabled ? "Open or create an agent…" : streaming ? "Steer the agent…" : "Ask pi anything…"}
             disabled={disabled}
             onChange={(e) => handleChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -346,14 +363,15 @@ export function InputBar({
               </div>
             )}
           </div>
-          {streaming ? (
-            <div className="stream-actions">
-              <button className="queue-btn" disabled={disabled || !text.trim()} onClick={submit}>Queue</button>
-              <button className="send-btn stop-btn" disabled={disabled} onClick={onStop}>Stop</button>
-            </div>
-          ) : (
-            <button className="send-btn" disabled={disabled || !text.trim()} onClick={submit}>Send</button>
-          )}
+          <button
+            className={`send-btn${showStop ? " stop-btn" : ""}`}
+            disabled={showStop ? disabled : !canSubmit}
+            onClick={showStop ? onStop : submit}
+            title={showStop ? "Abort" : streaming ? "Send to running agent" : "Send"}
+            aria-label={showStop ? "Abort" : streaming ? "Send to running agent" : "Send"}
+          >
+            {showStop ? "■" : "↑"}
+          </button>
         </div>
       </div>
     </div>

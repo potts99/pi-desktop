@@ -68,8 +68,12 @@ export interface SessionStatsInfo {
   sessionId: string;
   userMessages: number;
   assistantMessages: number;
+  toolCalls?: number;
+  toolResults?: number;
   totalMessages: number;
-  tokens: { input: number; output: number; total: number };
+  tokens: { input: number; output: number; cacheRead?: number; cacheWrite?: number; total: number };
+  cost?: number;
+  contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
 }
 
 /** Per-tab renderer state for each open session. */
@@ -84,6 +88,7 @@ export interface TabState {
   mode: AgentMode;
   queue: QueueState;
   retry: RetryState;
+  stats: SessionStatsInfo | null;
   error: string | null;
 }
 

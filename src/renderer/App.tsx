@@ -23,6 +23,22 @@ const commands: PaletteCommand[] = [
   { id: "toggleSidebar", label: "Toggle Sidebar", description: "Show or hide the sidebar", shortcut: "\u2318B" },
 ];
 
+function compactNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "--";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
+  return String(Math.round(value));
+}
+
+function contextText(stats: ReturnType<typeof useSessions>["stats"]): string {
+  const usage = stats?.contextUsage;
+  if (!usage) return "CH --";
+  const percent = usage.percent === null ? "--" : `${usage.percent.toFixed(1)}%`;
+  const windowSize = compactNumber(usage.contextWindow);
+  return `CH ${percent}/${windowSize} (auto)`;
+}
+
 export default function App() {
   const s = useSessions();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -89,6 +105,7 @@ export default function App() {
           activePath={s.activePath}
           pinnedPaths={pinnedPaths}
           onNewAgent={s.newAgent}
+          onAddWorkspace={s.addWorkspace}
           onOpen={(path) => s.openSession({ path })}
           onNew={(cwd) => s.openSession({ newIn: cwd })}
           onTogglePin={togglePin}
@@ -96,71 +113,83 @@ export default function App() {
         />
       )}
       <div className="main-pane">
-        <div className="topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
-          <TabBar
-            tabs={s.tabs}
-            activeIdx={s.activeIdx}
-            onActivate={s.activateTab}
-            onClose={s.closeTab}
-          />
-          {s.activeKey && (
-            <span className="session-stats">
-              {s.mode !== "normal" && <span className="stat-badge">{s.mode}</span>}
-              <span className="stat-item">{s.thinkingLevel}</span>
-              <span className="stat-item">{s.messages.length} msgs</span>
-            </span>
-          )}
-          <div className="top-actions">
-            {!sidebarOpen && (
-              <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
-            )}
-            {s.activeKey && (
-              <>
-                <button onClick={rename}>Rename</button>
-                <button onClick={() => void s.clone()}>Clone</button>
-                <button onClick={remove}>Delete</button>
-              </>
-            )}
-          </div>
-        </div>
-        {(s.error || s.retry.active) && (
-          <div className={`status-banner ${s.error ? "status-error" : ""}`}>
-            <span>
-              {s.error ?? `Retrying ${s.retry.attempt ?? ""}/${s.retry.maxAttempts ?? ""}`}
-            </span>
-            {s.error && <button onClick={s.retryLast}>Retry</button>}
-            {s.error && <button onClick={s.clearError}>Dismiss</button>}
-          </div>
-        )}
-        {s.opening ? (
-          <div className="empty-state">
-            <div className="spinner" />
-            <div className="empty-sub">Opening agent…</div>
-          </div>
-        ) : s.activeKey ? (
-          <Transcript messages={s.messages} streamingText={s.streamingText} onFork={s.fork} />
+        {settingsOpen ? (
+          <>
+            <div className="topbar settings-main-topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
+              <span className="crumb">Settings</span>
+              <div className="top-actions">
+                {!sidebarOpen && (
+                  <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
+                )}
+                <button onClick={() => setSettingsOpen(false)}>Done</button>
+              </div>
+            </div>
+            <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+          </>
         ) : (
-          <div className="empty-state">
-            <div className="empty-title">pi</div>
-            <div className="empty-sub">Pick an agent on the left, or start a New Agent.</div>
-          </div>
+          <>
+            <div className="topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
+              <TabBar
+                tabs={s.tabs}
+                activeIdx={s.activeIdx}
+                onActivate={s.activateTab}
+                onClose={s.closeTab}
+              />
+              {s.activeKey && (
+                <span className="session-stats">
+                  <span>↑{compactNumber(s.stats?.tokens.input)}</span>
+                  <span>↓{compactNumber(s.stats?.tokens.output)}</span>
+                  <span>R{compactNumber(s.stats?.tokens.cacheRead)}</span>
+                  <span>W{compactNumber(s.stats?.tokens.cacheWrite)}</span>
+                  <span className="stat-context">{contextText(s.stats)}</span>
+                </span>
+              )}
+              <div className="top-actions">
+                {!sidebarOpen && (
+                  <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
+                )}
+              </div>
+            </div>
+            {(s.error || s.retry.active) && (
+              <div className={`status-banner ${s.error ? "status-error" : ""}`}>
+                <span>
+                  {s.error ?? `Retrying ${s.retry.attempt ?? ""}/${s.retry.maxAttempts ?? ""}`}
+                </span>
+                {s.error && <button onClick={s.retryLast}>Retry</button>}
+                {s.error && <button onClick={s.clearError}>Dismiss</button>}
+              </div>
+            )}
+            {s.opening ? (
+              <div className="empty-state">
+                <div className="spinner" />
+                <div className="empty-sub">Opening agent…</div>
+              </div>
+            ) : s.activeKey ? (
+              <Transcript messages={s.messages} streamingText={s.streamingText} onFork={s.fork} />
+            ) : (
+              <div className="empty-state">
+                <div className="empty-title">pi</div>
+                <div className="empty-sub">Pick an agent on the left, or start a New Agent.</div>
+              </div>
+            )}
+            <InputBar
+              disabled={!s.activeKey}
+              streaming={s.streaming}
+              models={s.models}
+              mode={s.mode}
+              cwd={s.groups.find((g) => g.sessions.some((r) => r.path === s.activePath))?.path ?? null}
+              thinkingLevel={s.thinkingLevel}
+              thinkingLevels={s.thinkingLevels}
+              queue={s.queue}
+              onSend={s.send}
+              onStop={s.abort}
+              onModel={(p, i) => s.activeKey && window.pi.setModel(s.activeKey, p, i)}
+              onMode={s.setMode}
+              onThinking={s.setThinkingLevel}
+              onCycleThinking={s.cycleThinking}
+            />
+          </>
         )}
-        <InputBar
-          disabled={!s.activeKey}
-          streaming={s.streaming}
-          models={s.models}
-          mode={s.mode}
-          cwd={s.groups.find((g) => g.sessions.some((r) => r.path === s.activePath))?.path ?? null}
-          thinkingLevel={s.thinkingLevel}
-          thinkingLevels={s.thinkingLevels}
-          queue={s.queue}
-          onSend={s.send}
-          onStop={s.abort}
-          onModel={(p, i) => s.activeKey && window.pi.setModel(s.activeKey, p, i)}
-          onMode={s.setMode}
-          onThinking={s.setThinkingLevel}
-          onCycleThinking={s.cycleThinking}
-        />
       </div>
       <CommandPalette
         open={paletteOpen}
@@ -168,7 +197,6 @@ export default function App() {
         onClose={() => setPaletteOpen(false)}
         onExecute={executeCommand}
       />
-      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

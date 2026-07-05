@@ -8,6 +8,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "pack": "npm run build && electron-builder --mac dir",
+    "deploy": "npm run pack && rm -rf /Applications/pi-desktop.app && cp -R release/mac-arm64/pi-desktop.app /Applications/ && echo 'Deployed to /Applications/pi-desktop.app'",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json"
   },
@@ -21,12 +23,17 @@
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
     "electron": "^41.3.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "jsdom": "^29.1.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
     "vitest": "^2.1.2"

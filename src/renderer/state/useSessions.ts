@@ -7,6 +7,7 @@ import type {
   ModelChoice,
   QueueState,
   RetryState,
+  SessionStatsInfo,
   ThinkingLevel,
   SessionReplacement,
 } from "../../shared/types.ts";
@@ -54,6 +55,7 @@ function freshTab(sessionKey: string, sessionPath: string | null): TabState {
     mode: "normal",
     queue: emptyQueue,
     retry: { active: false },
+    stats: null,
     error: null,
   };
 }
@@ -63,6 +65,7 @@ export function useSessions() {
   const [tabs, setTabs] = useState<TabState[]>([]);
   const [activeIdx, setActiveIdx] = useState(-1);
   const [opening, setOpening] = useState(false);
+  const [defaultModels, setDefaultModels] = useState<ModelChoice[]>([]);
 
   const lastSendRef = useRef<{ text: string; mode: "prompt" | "steer" | "followUp" } | null>(null);
   const tabsRef = useRef(tabs);
@@ -85,6 +88,12 @@ export function useSessions() {
     });
   }
 
+  function refreshStats(key: string) {
+    void window.pi?.getSessionStats(key)
+      .then((stats) => patchTab(key, (t) => ({ ...t, stats })))
+      .catch(() => {});
+  }
+
   const refreshWorkspaces = useCallback(async () => {
     if (!window.pi) return;
     const paths = await window.pi.listWorkspaces();
@@ -100,16 +109,29 @@ export function useSessions() {
 
   useEffect(() => { refreshWorkspaces(); }, [refreshWorkspaces]);
   useEffect(() => window.pi?.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
+  useEffect(() => {
+    window.pi?.getSettings()
+      .then((settings) => {
+        const provider = settings.defaultProvider;
+        const id = settings.defaultModel;
+        if (typeof provider === "string" && typeof id === "string" && provider && id) {
+          setDefaultModels([{ provider, id }]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Session events dispatch to whichever tab owns the session key.
   useEffect(() =>
     window.pi?.onSessionEvent((key, ev) => {
       if (ev.kind === "message") {
         patchTab(key, (t) => ({ ...t, messages: mergeMessage(t.messages, ev.message), streamingText: ev.message.role === "assistant" ? "" : t.streamingText }));
+        refreshStats(key);
       } else if (ev.kind === "assistantDelta") {
         patchTab(key, (t) => ({ ...t, streaming: true, streamingText: t.streamingText + ev.text }));
       } else if (ev.kind === "idle") {
         patchTab(key, (t) => ({ ...t, streaming: false, streamingText: "" }));
+        refreshStats(key);
       } else if (ev.kind === "queue") {
         patchTab(key, (t) => ({ ...t, queue: ev.queue }));
       } else if (ev.kind === "retry") {
@@ -179,6 +201,7 @@ export function useSessions() {
     setOpening(false);
 
     void window.pi.getModels(sessionKey).then((m) => patchTab(sessionKey, (t) => ({ ...t, models: m }))).catch(() => {});
+    refreshStats(sessionKey);
   }, []);
 
   const send = useCallback(async (text: string, mode: "prompt" | "steer" | "followUp" = "prompt") => {
@@ -314,17 +337,24 @@ export function useSessions() {
     await openSession({ newIn: cwd });
   }, [groups, openSession, refreshWorkspaces]);
 
+  const addWorkspace = useCallback(async () => {
+    if (!window.pi) return;
+    await window.pi.addWorkspace();
+    await refreshWorkspaces();
+  }, [refreshWorkspaces]);
+
   // Derived from active tab
   const tab = tabs[activeIdx];
   const activePath = tab?.sessionPath ?? null;
   const messages = tab?.messages ?? [];
   const streamingText = tab?.streamingText ?? "";
   const streaming = tab?.streaming ?? false;
-  const models = tab?.models ?? [];
+  const models = tab ? (tab.models.length > 0 ? tab.models : defaultModels) : defaultModels;
   const thinkingLevel = tab?.thinkingLevel ?? "medium";
   const mode = tab?.mode ?? "normal";
   const queue = tab?.queue ?? emptyQueue;
   const retry = tab?.retry ?? { active: false };
+  const stats: SessionStatsInfo | null = tab?.stats ?? null;
   const error = tab?.error ?? null;
 
   const activeTitle = activePath
@@ -352,6 +382,7 @@ export function useSessions() {
     thinkingLevels,
     queue,
     retry,
+    stats,
     error,
     openSession,
     send,
@@ -365,6 +396,7 @@ export function useSessions() {
     rename,
     remove,
     newAgent,
+    addWorkspace,
     closeTab,
     activateTab,
     nextTab,

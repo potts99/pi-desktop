@@ -1,6 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { access, unlink } from "node:fs/promises";
+import { access, readFile, readdir, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { RpcClient } from "@earendil-works/pi-coding-agent";
 import { getSessionArgs } from "./desktop-config.ts";
@@ -19,7 +20,11 @@ import type {
 
 // The package's "exports" only defines an ESM "import" condition, so resolve
 // via import.meta.resolve (ESM) — not require.resolve — then derive cli.js.
-const cliPath = join(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))), "cli.js");
+// In packaged Electron, the app code runs from app.asar, but the spawned Node
+// process cannot execute files from that virtual archive. electron-builder
+// unpacks node_modules beside it, so point the subprocess at the real path.
+const resolvedCliPath = join(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))), "cli.js");
+const cliPath = resolvedCliPath.replace("/app.asar/", "/app.asar.unpacked/");
 interface Entry {
   client: RpcClient;
   cwd: string;
@@ -33,6 +38,45 @@ let counter = 0;
 
 const defaultQueue = { steering: [], followUp: [] };
 const defaultMode: AgentMode = "normal";
+const sharedModelsPath = join(homedir(), ".pi", "agent", "models.json");
+let cachedAgentEnv: Record<string, string> | null = null;
+
+interface SharedModelsFile {
+  providers?: Record<string, { models?: Array<{ id?: unknown }> }>;
+}
+
+function stringEnv(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+async function nodePathDirs(): Promise<string[]> {
+  const home = homedir();
+  const dirs = [
+    dirname(process.execPath),
+    join(home, ".nvm", "current", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+  ];
+  try {
+    const versionsDir = join(home, ".nvm", "versions", "node");
+    const versions = await readdir(versionsDir, { withFileTypes: true });
+    dirs.push(...versions.filter((entry) => entry.isDirectory()).map((entry) => join(versionsDir, entry.name, "bin")));
+  } catch { /* nvm may not be installed */ }
+  return dirs;
+}
+
+async function agentEnv(): Promise<Record<string, string>> {
+  if (cachedAgentEnv) return cachedAgentEnv;
+  const existingPath = process.env.PATH ?? "";
+  const dirs = [...await nodePathDirs(), ...existingPath.split(":")].filter(Boolean);
+  const uniqueDirs = [...new Set(dirs)];
+  cachedAgentEnv = { ...stringEnv(), PATH: uniqueDirs.join(":") };
+  return cachedAgentEnv;
+}
 
 function toBlocks(msg: AgentMessage, id?: string): TranscriptMessage | null {
   if (msg.role === "user") {
@@ -85,6 +129,29 @@ async function transcript(client: RpcClient): Promise<TranscriptMessage[]> {
   }
 }
 
+async function sharedModelChoices(): Promise<ModelChoice[]> {
+  try {
+    const cfg = JSON.parse(await readFile(sharedModelsPath, "utf-8")) as SharedModelsFile;
+    return Object.entries(cfg.providers ?? {}).flatMap(([provider, value]) =>
+      (value.models ?? [])
+        .filter((model): model is { id: string } => typeof model.id === "string" && model.id.length > 0)
+        .map((model) => ({ provider, id: model.id })),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function uniqueModels(models: ModelChoice[]): ModelChoice[] {
+  const seen = new Set<string>();
+  return models.filter((model) => {
+    const key = `${model.provider}/${model.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function hydrateForkIds(client: RpcClient, message: TranscriptMessage): Promise<TranscriptMessage> {
   if (message.id || message.role !== "user") return message;
   const text = textOf(message);
@@ -135,7 +202,7 @@ function wireEvents(sessionKey: string, entry: Entry): void {
 }
 
 async function startClient(entry: Entry, sessionKey: string): Promise<void> {
-  entry.client = new RpcClient({ cliPath, cwd: entry.cwd || undefined, args: entry.args });
+  entry.client = new RpcClient({ cliPath, cwd: entry.cwd || undefined, args: entry.args, env: await agentEnv() });
   await entry.client.start();
   wireEvents(sessionKey, entry);
 }
@@ -186,7 +253,7 @@ export async function openSession(
   const sessionArgs = "path" in arg ? ["--session", arg.path] : [];
   const desktopArgs = await getSessionArgs();
   const args = [...sessionArgs, ...desktopArgs];
-  const client = new RpcClient({ cliPath, cwd, args });
+  const client = new RpcClient({ cliPath, cwd, args, env: await agentEnv() });
   await client.start();
 
   const sessionKey = `s${++counter}`;
@@ -233,7 +300,8 @@ export async function abortSession(sessionKey: string): Promise<void> {
 
 export async function getModels(sessionKey: string): Promise<ModelChoice[]> {
   const models = await runCommand(sessionKey, (e) => e.client.getAvailableModels());
-  return models.map((m) => ({ provider: m.provider, id: m.id }));
+  const available = models.map((m) => ({ provider: m.provider, id: m.id }));
+  return uniqueModels([...await sharedModelChoices(), ...available]);
 }
 
 export async function setModel(sessionKey: string, provider: string, id: string): Promise<void> {

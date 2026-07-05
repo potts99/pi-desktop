@@ -1,12 +1,13 @@
 import type { WorkspaceGroup } from "../../shared/types.ts";
 
 export function Sidebar({
-  groups, activePath, pinnedPaths, onNewAgent, onOpen, onNew, onTogglePin, onOpenSettings,
+  groups, activePath, pinnedPaths, onNewAgent, onAddWorkspace, onOpen, onNew, onTogglePin, onOpenSettings,
 }: {
   groups: WorkspaceGroup[];
   activePath: string | null;
   pinnedPaths: string[];
   onNewAgent: () => void;
+  onAddWorkspace: () => void;
   onOpen: (path: string) => void;
   onNew: (cwd: string) => void;
   onTogglePin: (path: string) => void;
@@ -47,18 +48,29 @@ export function Sidebar({
                 >◆</button>
               </div>
             ))}
-            <div className="section-head">Workspaces</div>
+            <div className="section-head section-head-action">
+              <span>Workspaces</span>
+              <button className="section-add-btn" onClick={onAddWorkspace} title="Add workspace">+</button>
+            </div>
           </>
         )}
-        {pinned.length === 0 && <div className="section-head">Workspaces</div>}
+        {pinned.length === 0 && (
+          <div className="section-head section-head-action">
+            <span>Workspaces</span>
+            <button className="section-add-btn" onClick={onAddWorkspace} title="Add workspace">+</button>
+          </div>
+        )}
         {groups.length === 0 && (
-          <div className="empty-hint">No workspaces yet. Add one to see its agents.</div>
+          <div className="empty-hint">
+            <div>No workspaces yet. Add one to see its agents.</div>
+            <button className="empty-action" onClick={onAddWorkspace}>Add Workspace</button>
+          </div>
         )}
         {groups.map((g) => (
           <div key={g.path} className="ws-group">
             <div className="ws-head">
-              <span className="ws-name">{g.name}</span>
-              <button className="ws-new" onClick={() => onNew(g.path)}>New Agent</button>
+              <span className="ws-name"><span className="ws-icon" aria-hidden="true">▣</span>{g.name}</span>
+              <button className="ws-new" onClick={() => onNew(g.path)} title={`New agent in ${g.name}`} aria-label={`New agent in ${g.name}`}>+</button>
             </div>
             {g.sessions.filter((s) => !pinnedPaths.includes(s.path)).map((s) => (
               <div key={s.path} className="session-row-wrap">

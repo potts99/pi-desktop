@@ -55,6 +55,8 @@ const sections: { title: string; fields: SettingField[] }[] = [
   },
 ];
 
+const sectionId = (title: string) => `settings-${title.toLowerCase().replace(/\s+/g, "-")}`;
+
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [settings, setSettings] = useState<Record<string, unknown>>({});
   const [desktopConfig, setDesktopConfig] = useState<Record<string, unknown>>({});
@@ -94,34 +96,48 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     switch (f.type) {
       case "toggle":
         return (
-          <label className="setting-toggle">
+          <label className="settings-toggle">
             <input type="checkbox" checked={!!val} onChange={(e) => update(f.key, e.target.checked)} />
             <span className="toggle-slider" />
           </label>
         );
       case "select":
         return (
-          <select className="setting-select" value={String(val ?? f.options?.[0]?.value ?? "")} onChange={(e) => update(f.key, e.target.value)}>
+          <select className="settings-select" value={String(val ?? f.options?.[0]?.value ?? "")} onChange={(e) => update(f.key, e.target.value)}>
             {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         );
       case "number":
-        return <input className="setting-input" type="number" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, Number(e.target.value))} />;
+        return <input className="settings-input" type="number" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, Number(e.target.value))} />;
       default:
-        return <input className="setting-input" type="text" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, e.target.value)} />;
+        return <input className="settings-input" type="text" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, e.target.value)} />;
     }
   };
 
   return (
-    <div className="settings-overlay" onMouseDown={onClose}>
-      <div className="settings-panel" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>Settings</h2>
-          <button className="settings-close" onClick={onClose}>×</button>
-        </div>
-        <div className="settings-body">
+    <div className="settings-panel">
+      <div className="settings-body">
+        <div className="settings-nav" aria-label="Settings sections">
+          <div className="section-head">Settings</div>
           {sections.map((section) => (
-            <div key={section.title} className="settings-section">
+            <button
+              key={section.title}
+              className="settings-nav-item"
+              onClick={() => document.getElementById(sectionId(section.title))?.scrollIntoView({ block: "start" })}
+            >
+              {section.title}
+            </button>
+          ))}
+          <button
+            className="settings-nav-item"
+            onClick={() => document.getElementById("settings-system-prompt")?.scrollIntoView({ block: "start" })}
+          >
+            System Prompt
+          </button>
+        </div>
+        <div className="settings-content">
+          {sections.map((section) => (
+            <div key={section.title} id={sectionId(section.title)} className="settings-section">
               <h3 className="settings-section-title">{section.title}</h3>
               {section.fields.map((f) => (
                 <div key={f.key} className="settings-row">
@@ -136,7 +152,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               ))}
             </div>
           ))}
-          <div className="settings-section">
+          <div id="settings-system-prompt" className="settings-section">
             <h3 className="settings-section-title">System Prompt</h3>
             <div className="settings-row system-prompt-row">
               <div className="settings-info" style={{ width: "100%" }}>
@@ -156,10 +172,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </div>
           </div>
         </div>
-        <div className="settings-footer">
-          {saving && <span className="settings-saving">Saving...</span>}
-          {saved && <span className="settings-saved">Saved</span>}
-        </div>
+      </div>
+      <div className="settings-footer">
+        {saving && <span className="settings-saving">Saving...</span>}
+        {saved && <span className="settings-saved">Saved</span>}
       </div>
     </div>
   );
