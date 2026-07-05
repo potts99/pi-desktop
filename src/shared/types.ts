@@ -64,6 +64,21 @@ export interface SessionReplacement {
   mode: AgentMode;
 }
 
+/** Per-tab renderer state for each open session. */
+export interface TabState {
+  sessionKey: string;
+  sessionPath: string | null;
+  messages: TranscriptMessage[];
+  streamingText: string;
+  streaming: boolean;
+  models: ModelChoice[];
+  thinkingLevel: ThinkingLevel;
+  mode: AgentMode;
+  queue: QueueState;
+  retry: RetryState;
+  error: string | null;
+}
+
 // Events pushed main -> renderer for an open session.
 // (Initial history is returned synchronously from openSession, not via an event.)
 export type SessionEvent =

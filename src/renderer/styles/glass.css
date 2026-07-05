@@ -251,6 +251,24 @@ button { font-family: inherit; }
   border-bottom: 1px solid var(--cursor-stroke-primary); -webkit-app-region: drag; }
 .topbar-min { padding-left: 20px; }
 .crumb { font-size: 13px; color: var(--cursor-text-secondary); font-weight: 500; }
+
+/* ── Tab Bar ── */
+.tab-bar { display: flex; align-items: stretch; gap: 0; height: 100%; overflow-x: auto; -webkit-app-region: no-drag; }
+.tab-item {
+  display: flex; align-items: center; gap: 6px; padding: 0 10px 0 14px;
+  font-size: 12.5px; color: var(--cursor-text-tertiary); cursor: pointer;
+  border-right: 1px solid var(--cursor-stroke-primary);
+  white-space: nowrap; user-select: none; min-width: 0;
+}
+.tab-item:hover { background: var(--cursor-bg-hover); color: var(--cursor-text-secondary); }
+.tab-item.tab-active { color: var(--cursor-text-primary); background: var(--cursor-bg); }
+.tab-title { overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.tab-close {
+  border: none; background: none; color: var(--cursor-text-quaternary);
+  font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px;
+  border-radius: 3px; display: flex; align-items: center;
+}
+.tab-close:hover { background: var(--cursor-bg-hover); color: var(--cursor-text-primary); }
 .top-actions { display: flex; align-items: center; gap: 6px; -webkit-app-region: no-drag; }
 .top-actions button, .status-banner button, .msg-actions button, .queue-btn {
   border: 1px solid var(--cursor-stroke-primary);

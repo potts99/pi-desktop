@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AgentMode,
+  TabState,
   TranscriptMessage,
   WorkspaceGroup,
   ModelChoice,
@@ -41,26 +42,51 @@ function mergeMessage(messages: TranscriptMessage[], next: TranscriptMessage): T
   return [...messages, next];
 }
 
+function freshTab(sessionKey: string, sessionPath: string | null): TabState {
+  return {
+    sessionKey,
+    sessionPath,
+    messages: [],
+    streamingText: "",
+    streaming: false,
+    models: [],
+    thinkingLevel: "medium",
+    mode: "normal",
+    queue: emptyQueue,
+    retry: { active: false },
+    error: null,
+  };
+}
+
 export function useSessions() {
   const [groups, setGroups] = useState<WorkspaceGroup[]>([]);
-  const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [activePath, setActivePath] = useState<string | null>(null);
-  const [messages, setMessages] = useState<TranscriptMessage[]>([]);
-  const [streamingText, setStreamingText] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [models, setModels] = useState<ModelChoice[]>([]);
-  const [mode, setModeState] = useState<AgentMode>("normal");
-  const [thinkingLevel, setThinkingLevelState] = useState<ThinkingLevel>("medium");
-  const [queue, setQueue] = useState<QueueState>(emptyQueue);
-  const [retry, setRetry] = useState<RetryState>({ active: false });
+  const [tabs, setTabs] = useState<TabState[]>([]);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
   const lastSendRef = useRef<{ text: string; mode: "prompt" | "steer" | "followUp" } | null>(null);
-  const activeKeyRef = useRef<string | null>(null);
-  activeKeyRef.current = activeKey;
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const activeIdxRef = useRef(activeIdx);
+  activeIdxRef.current = activeIdx;
+
+  const activeKey = tabs[activeIdx]?.sessionKey ?? null;
+
+  /** Apply an update to the tab with the given session key. */
+  function patchTab(key: string, fn: (t: TabState) => TabState) {
+    setTabs((prev) => {
+      const i = prev.findIndex((t) => t.sessionKey === key);
+      if (i < 0) return prev;
+      const next = fn(prev[i]);
+      if (next === prev[i]) return prev;
+      const copy = [...prev];
+      copy[i] = next;
+      return copy;
+    });
+  }
 
   const refreshWorkspaces = useCallback(async () => {
-    if (!window.pi) return; // preload not loaded (e.g. plain-browser preview) — render shell only
+    if (!window.pi) return;
     const paths = await window.pi.listWorkspaces();
     const gs = await Promise.all(
       paths.map(async (p) => ({
@@ -73,76 +99,99 @@ export function useSessions() {
   }, []);
 
   useEffect(() => { refreshWorkspaces(); }, [refreshWorkspaces]);
-
   useEffect(() => window.pi?.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
 
-  // message_end (kind "message") is the single source of truth for committed
-  // messages — pi emits it for user, assistant, and tool messages alike. The
-  // text deltas only feed a transient streaming preview, so nothing is ever
-  // rendered twice.
+  // Session events dispatch to whichever tab owns the session key.
   useEffect(() =>
     window.pi?.onSessionEvent((key, ev) => {
-      if (key !== activeKeyRef.current) return;
       if (ev.kind === "message") {
-        setMessages((m) => mergeMessage(m, ev.message));
-        if (ev.message.role === "assistant") setStreamingText(""); // final text has landed
+        patchTab(key, (t) => ({ ...t, messages: mergeMessage(t.messages, ev.message), streamingText: ev.message.role === "assistant" ? "" : t.streamingText }));
+      } else if (ev.kind === "assistantDelta") {
+        patchTab(key, (t) => ({ ...t, streaming: true, streamingText: t.streamingText + ev.text }));
+      } else if (ev.kind === "idle") {
+        patchTab(key, (t) => ({ ...t, streaming: false, streamingText: "" }));
+      } else if (ev.kind === "queue") {
+        patchTab(key, (t) => ({ ...t, queue: ev.queue }));
+      } else if (ev.kind === "retry") {
+        patchTab(key, (t) => ({ ...t, retry: ev.retry }));
+      } else if (ev.kind === "sessionState") {
+        patchTab(key, (t) => ({
+          ...t,
+          sessionPath: ev.state.sessionPath !== undefined ? (ev.state.sessionPath ?? null) : t.sessionPath,
+          thinkingLevel: ev.state.thinkingLevel ?? t.thinkingLevel,
+          mode: ev.state.mode ?? t.mode,
+          streaming: ev.state.isStreaming ?? t.streaming,
+          queue: ev.state.queue ?? t.queue,
+        }));
+      } else if (ev.kind === "error") {
+        patchTab(key, (t) => ({ ...t, streaming: false, streamingText: "", error: ev.message }));
       }
-      else if (ev.kind === "assistantDelta") { setStreaming(true); setStreamingText((t) => t + ev.text); }
-      else if (ev.kind === "idle") { setStreaming(false); setStreamingText(""); }
-      else if (ev.kind === "queue") setQueue(ev.queue);
-      else if (ev.kind === "retry") setRetry(ev.retry);
-      else if (ev.kind === "sessionState") {
-        if (ev.state.sessionPath !== undefined) setActivePath(ev.state.sessionPath ?? null);
-        if (ev.state.thinkingLevel) setThinkingLevelState(ev.state.thinkingLevel);
-        if (ev.state.mode) setModeState(ev.state.mode);
-        if (ev.state.isStreaming !== undefined) setStreaming(ev.state.isStreaming);
-        if (ev.state.queue) setQueue(ev.state.queue);
-      }
-      else if (ev.kind === "error") { setStreaming(false); setStreamingText(""); setError(ev.message); }
     }), []);
+
+  function activateTab(idx: number) {
+    if (idx >= 0 && idx < tabsRef.current.length) setActiveIdx(idx);
+  }
+
+  function closeTab(idx: number) {
+    const tab = tabsRef.current[idx];
+    if (!tab) return;
+    // Close the underlying session.
+    void window.pi?.closeSession(tab.sessionKey);
+    setTabs((prev) => prev.filter((_, i) => i !== idx));
+    // Adjust active index.
+    setActiveIdx((prev) => {
+      if (prev > idx) return prev - 1;
+      if (prev === idx) return Math.min(idx, tabsRef.current.length - 2);
+      return prev;
+    });
+  }
+
+  function nextTab() {
+    setActiveIdx((prev) => (tabsRef.current.length > 0 ? (prev + 1) % tabsRef.current.length : -1));
+  }
+
+  function prevTab() {
+    setActiveIdx((prev) => (tabsRef.current.length > 0 ? (prev - 1 + tabsRef.current.length) % tabsRef.current.length : -1));
+  }
 
   const openSession = useCallback(async (arg: { path: string } | { newIn: string }) => {
     if (!window.pi) return;
-    // Optimistic: select + clear immediately so the click feels instant. The
-    // transcript and models fill in once the spawned agent process is ready.
-    setActiveKey(null);
-    setActivePath("path" in arg ? arg.path : null);
-    setMessages([]);
-    setStreamingText("");
-    setStreaming(false);
-    setModels([]);
-    setQueue(emptyQueue);
-    setRetry({ active: false });
-    setError(null);
-    setOpening(true);
+    const sessionPath = "path" in arg ? arg.path : null;
 
+    // Reuse existing tab if this session is already open.
+    const existing = tabsRef.current.findIndex((t) => t.sessionPath === sessionPath && sessionPath !== null);
+    if (existing >= 0) { setActiveIdx(existing); return; }
+
+    setOpening(true);
     const { sessionKey, messages: history, state } = await window.pi.openSession(arg);
-    setActiveKey(sessionKey);
-    setActivePath(state.sessionPath ?? ("path" in arg ? arg.path : null));
-    setMessages(history ?? []);
-    setModeState(state.mode);
-    setStreaming(state.isStreaming);
-    setThinkingLevelState(state.thinkingLevel);
-    setQueue(state.queue);
+    const tab = freshTab(sessionKey, state.sessionPath ?? sessionPath);
+    tab.messages = history ?? [];
+    tab.streaming = state.isStreaming;
+    tab.thinkingLevel = state.thinkingLevel;
+    tab.mode = state.mode;
+    tab.queue = state.queue;
+
+    setTabs((prev) => [...prev, tab]);
+    setActiveIdx((prev) => (prev >= 0 ? prev : 0)); // stays on current, or lands on first
+    // Need fresh index after setTabs — use length as the new tab's index.
+    const newIdx = tabsRef.current.length;
+    setActiveIdx(newIdx);
     setOpening(false);
-    // Models don't gate the render — fetch in the background.
-    void window.pi.getModels(sessionKey).then(setModels).catch(() => setModels([]));
+
+    void window.pi.getModels(sessionKey).then((m) => patchTab(sessionKey, (t) => ({ ...t, models: m }))).catch(() => {});
   }, []);
 
   const send = useCallback(async (text: string, mode: "prompt" | "steer" | "followUp" = "prompt") => {
-    if (!activeKey || !window.pi) return;
-    // No optimistic add — pi emits a message_end for the user prompt almost
-    // immediately, which is the authoritative copy (avoids duplicates).
-    setStreaming(true);
-    setError(null);
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
+    patchTab(key, (t) => ({ ...t, streaming: true, error: null }));
     lastSendRef.current = { text, mode };
     try {
-      await window.pi.sendPrompt(activeKey, text, mode);
+      await window.pi.sendPrompt(key, text, mode);
     } catch (err) {
-      setStreaming(false);
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, streaming: false, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey]);
+  }, []);
 
   const retryLast = useCallback(() => {
     const last = lastSendRef.current;
@@ -150,119 +199,146 @@ export function useSessions() {
   }, [send]);
 
   const abort = useCallback(async () => {
-    if (!activeKey || !window.pi) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
     try {
-      await window.pi.abortSession(activeKey);
-      setStreaming(false);
-      setStreamingText("");
-      setRetry({ active: false });
+      await window.pi.abortSession(key);
+      patchTab(key, (t) => ({ ...t, streaming: false, streamingText: "", retry: { active: false } }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey]);
+  }, []);
 
   const setThinkingLevel = useCallback(async (level: ThinkingLevel) => {
-    if (!activeKey || !window.pi) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
     try {
-      const applied = await window.pi.setThinkingLevel(activeKey, level);
-      setThinkingLevelState(applied);
+      const applied = await window.pi.setThinkingLevel(key, level);
+      patchTab(key, (t) => ({ ...t, thinkingLevel: applied }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey]);
+  }, []);
 
   const cycleThinking = useCallback(async () => {
-    if (!activeKey || !window.pi) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
     try {
-      const next = await window.pi.cycleThinkingLevel(activeKey);
-      if (next) setThinkingLevelState(next);
+      const next = await window.pi.cycleThinkingLevel(key);
+      if (next) patchTab(key, (t) => ({ ...t, thinkingLevel: next }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey]);
+  }, []);
 
   const setMode = useCallback(async (m: AgentMode) => {
-    if (!activeKey || !window.pi) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
     try {
-      const applied = await window.pi.setMode(activeKey, m);
-      setModeState(applied);
+      const applied = await window.pi.setMode(key, m);
+      patchTab(key, (t) => ({ ...t, mode: applied }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey]);
+  }, []);
 
   const applyReplacement = useCallback((replacement: SessionReplacement) => {
     if (replacement.cancelled) return;
-    setActivePath(replacement.sessionPath ?? null);
-    setMessages(replacement.messages);
-    setModeState(replacement.mode);
-    setThinkingLevelState(replacement.thinkingLevel);
-    setStreamingText("");
-    setStreaming(false);
-    setQueue(emptyQueue);
-    setError(null);
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key) return;
+    patchTab(key, (t) => ({
+      ...t,
+      sessionPath: replacement.sessionPath ?? t.sessionPath,
+      messages: replacement.messages,
+      mode: replacement.mode,
+      thinkingLevel: replacement.thinkingLevel,
+      streamingText: "",
+      streaming: false,
+      queue: emptyQueue,
+      error: null,
+    }));
     void refreshWorkspaces();
   }, [refreshWorkspaces]);
 
   const fork = useCallback(async (entryId: string) => {
-    if (!activeKey || !window.pi) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
     try {
-      applyReplacement(await window.pi.forkSession(activeKey, entryId));
+      applyReplacement(await window.pi.forkSession(key, entryId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey, applyReplacement]);
+  }, [applyReplacement]);
 
   const clone = useCallback(async () => {
-    if (!activeKey || !window.pi) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
     try {
-      applyReplacement(await window.pi.cloneSession(activeKey));
+      applyReplacement(await window.pi.cloneSession(key));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey, applyReplacement]);
+  }, [applyReplacement]);
 
   const rename = useCallback(async (name: string) => {
-    if (!activeKey || !window.pi || !name.trim()) return;
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi || !name.trim()) return;
     try {
-      await window.pi.renameSession(activeKey, name.trim());
+      await window.pi.renameSession(key, name.trim());
       await refreshWorkspaces();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activeKey, refreshWorkspaces]);
+  }, [refreshWorkspaces]);
 
   const remove = useCallback(async () => {
-    if (!activePath || !window.pi) return;
+    const tab = tabsRef.current[activeIdxRef.current];
+    if (!tab?.sessionPath || !window.pi) return;
     try {
-      await window.pi.deleteSession(activePath);
-      setActiveKey(null);
-      setActivePath(null);
-      setMessages([]);
-      setStreaming(false);
-      setStreamingText("");
-      setQueue(emptyQueue);
-      setError(null);
+      await window.pi.deleteSession(tab.sessionPath);
+      closeTab(activeIdxRef.current);
       await refreshWorkspaces();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      patchTab(tab.sessionKey, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [activePath, refreshWorkspaces]);
+  }, [refreshWorkspaces]);
 
   const newAgent = useCallback(async () => {
     if (!window.pi) return;
     if (groups.length === 0) { await window.pi.addWorkspace(); await refreshWorkspaces(); return; }
-    const activeGroup = activePath ? groups.find((g) => g.sessions.some((s) => s.path === activePath)) : undefined;
+    const tab = tabsRef.current[activeIdxRef.current];
+    const activeGroup = tab?.sessionPath
+      ? groups.find((g) => g.sessions.some((s) => s.path === tab.sessionPath))
+      : undefined;
     const cwd = activeGroup?.path ?? groups[0].path;
     await openSession({ newIn: cwd });
-  }, [groups, activePath, openSession, refreshWorkspaces]);
+  }, [groups, openSession, refreshWorkspaces]);
+
+  // Derived from active tab
+  const tab = tabs[activeIdx];
+  const activePath = tab?.sessionPath ?? null;
+  const messages = tab?.messages ?? [];
+  const streamingText = tab?.streamingText ?? "";
+  const streaming = tab?.streaming ?? false;
+  const models = tab?.models ?? [];
+  const thinkingLevel = tab?.thinkingLevel ?? "medium";
+  const mode = tab?.mode ?? "normal";
+  const queue = tab?.queue ?? emptyQueue;
+  const retry = tab?.retry ?? { active: false };
+  const error = tab?.error ?? null;
 
   const activeTitle = activePath
     ? groups.flatMap((g) => g.sessions).find((s) => s.path === activePath)?.title ?? "Session"
     : activeKey ? "New Agent" : null;
 
+  const clearError = useCallback(() => {
+    if (activeKey) patchTab(activeKey, (t) => ({ ...t, error: null }));
+  }, [activeKey]);
+
   return {
     groups,
+    tabs,
+    activeIdx,
     activeKey,
     activePath,
     activeTitle,
@@ -289,6 +365,10 @@ export function useSessions() {
     rename,
     remove,
     newAgent,
-    clearError: () => setError(null),
+    closeTab,
+    activateTab,
+    nextTab,
+    prevTab,
+    clearError,
   };
 }

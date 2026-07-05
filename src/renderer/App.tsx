@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import "./styles/glass.css";
 import { useSessions } from "./state/useSessions.ts";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { Transcript } from "./components/Transcript.tsx";
 import { InputBar } from "./components/InputBar.tsx";
+import { TabBar } from "./components/TabBar.tsx";
 
 export default function App() {
   const s = useSessions();
@@ -13,6 +15,21 @@ export default function App() {
   const remove = () => {
     if (window.confirm("Delete this session?")) void s.remove();
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "n" && !e.shiftKey) { e.preventDefault(); void s.newAgent(); }
+      else if (e.key === "w") { e.preventDefault(); s.closeTab(s.activeIdx); }
+      else if (e.key === "]" && e.shiftKey) { e.preventDefault(); s.nextTab(); }
+      else if (e.key === "[" && e.shiftKey) { e.preventDefault(); s.prevTab(); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [s]);
+
   return (
     <div className="app">
       <Sidebar
@@ -24,14 +41,21 @@ export default function App() {
       />
       <div className="main-pane">
         <div className="topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
-          <span className="crumb">{s.activeTitle ?? ""}</span>
-          {s.activeKey && (
-            <div className="top-actions">
-              <button onClick={rename}>Rename</button>
-              <button onClick={() => void s.clone()}>Clone</button>
-              <button onClick={remove}>Delete</button>
-            </div>
-          )}
+          <TabBar
+            tabs={s.tabs}
+            activeIdx={s.activeIdx}
+            onActivate={s.activateTab}
+            onClose={s.closeTab}
+          />
+          <div className="top-actions">
+            {s.activeKey && (
+              <>
+                <button onClick={rename}>Rename</button>
+                <button onClick={() => void s.clone()}>Clone</button>
+                <button onClick={remove}>Delete</button>
+              </>
+            )}
+          </div>
         </div>
         {(s.error || s.retry.active) && (
           <div className={`status-banner ${s.error ? "status-error" : ""}`}>
