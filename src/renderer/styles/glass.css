@@ -390,10 +390,38 @@ button { font-family: inherit; }
   box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 .composer:focus-within { border-color: #c4c4c0; }
+.composer-textarea-wrap { position: relative; }
 .composer textarea {
   width: 100%; min-height: 24px; max-height: 200px; resize: none; border: none; outline: none;
   background: none; color: var(--cursor-text-primary);
   font: inherit; font-size: 13.5px; line-height: 1.5;
+}
+
+/* ── Slash command popup ── */
+.slash-popup {
+  position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px;
+  max-height: 240px; overflow-y: auto;
+  background: var(--cursor-bg-elevated);
+  border: 1px solid var(--cursor-stroke-secondary);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  z-index: 100;
+}
+.slash-item {
+  display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+  cursor: pointer; font-size: 13px;
+}
+.slash-item:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+.slash-item:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+.slash-item.slash-selected,
+.slash-item:hover { background: var(--cursor-bg-hover); }
+.slash-label {
+  font-weight: 600; color: var(--cursor-text-primary);
+  font-family: var(--mono); font-size: 12.5px; white-space: nowrap;
+}
+.slash-desc {
+  color: var(--cursor-text-tertiary); font-size: 12.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .composer textarea::placeholder { color: var(--cursor-text-quaternary); }
 .composer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
