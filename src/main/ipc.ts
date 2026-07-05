@@ -2,6 +2,7 @@ import { ipcMain, dialog, BrowserWindow } from "electron";
 import type { FSWatcher } from "node:fs";
 import { listWorkspaces, addWorkspace } from "./workspaces.ts";
 import { listSessions, listWorkspaceFiles, sessionDirFor, watchDir } from "./sessions.ts";
+import { getPinned, togglePin } from "./pinned.ts";
 import * as rt from "./session-runtime.ts";
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
@@ -57,6 +58,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("deleteSession", (_e, sessionPath: string) => rt.deleteSession(sessionPath));
   ipcMain.handle("listWorkspaceFiles", (_e, cwd: string, prefix: string) => listWorkspaceFiles(cwd, prefix));
   ipcMain.handle("getLastAssistantText", (_e, key: string) => rt.getLastAssistantText(key));
+  ipcMain.handle("getSessionStats", (_e, key: string) => rt.getSessionStats(key));
+  ipcMain.handle("getPinned", () => getPinned());
+  ipcMain.handle("togglePin", (_e, path: string) => togglePin(path));
   ipcMain.handle("closeWindow", () => { getWindow()?.close(); });
   ipcMain.handle("maximizeWindow", () => { getWindow()?.maximize(); });
   ipcMain.handle("minimizeWindow", () => { getWindow()?.minimize(); });

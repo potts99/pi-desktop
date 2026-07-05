@@ -25,6 +25,13 @@ export default function App() {
   const s = useSessions();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
+
+  useEffect(() => { window.pi?.getPinned().then(setPinnedPaths).catch(() => {}); }, []);
+
+  const togglePin = useCallback((path: string) => {
+    window.pi?.togglePin(path).then(setPinnedPaths).catch(() => {});
+  }, []);
 
   const rename = useCallback(() => {
     const name = window.prompt("Session name", s.activeTitle ?? "");
@@ -76,9 +83,11 @@ export default function App() {
         <Sidebar
           groups={s.groups}
           activePath={s.activePath}
+          pinnedPaths={pinnedPaths}
           onNewAgent={s.newAgent}
           onOpen={(path) => s.openSession({ path })}
           onNew={(cwd) => s.openSession({ newIn: cwd })}
+          onTogglePin={togglePin}
         />
       )}
       <div className="main-pane">
@@ -89,6 +98,13 @@ export default function App() {
             onActivate={s.activateTab}
             onClose={s.closeTab}
           />
+          {s.activeKey && (
+            <span className="session-stats">
+              {s.mode !== "normal" && <span className="stat-badge">{s.mode}</span>}
+              <span className="stat-item">{s.thinkingLevel}</span>
+              <span className="stat-item">{s.messages.length} msgs</span>
+            </span>
+          )}
           <div className="top-actions">
             {!sidebarOpen && (
               <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>

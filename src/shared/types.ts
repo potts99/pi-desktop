@@ -64,6 +64,14 @@ export interface SessionReplacement {
   mode: AgentMode;
 }
 
+export interface SessionStatsInfo {
+  sessionId: string;
+  userMessages: number;
+  assistantMessages: number;
+  totalMessages: number;
+  tokens: { input: number; output: number; total: number };
+}
+
 /** Per-tab renderer state for each open session. */
 export interface TabState {
   sessionKey: string;
@@ -109,12 +117,15 @@ export interface Api {
   cloneSession(sessionKey: string): Promise<SessionReplacement>;
   renameSession(sessionKey: string, name: string): Promise<void>;
   deleteSession(sessionPath: string): Promise<void>;
+  getSessionStats(sessionKey: string): Promise<SessionStatsInfo>;
   getLastAssistantText(sessionKey: string): Promise<string | null>;
   // window controls
   closeWindow(): Promise<void>;
   maximizeWindow(): Promise<void>;
   minimizeWindow(): Promise<void>;
   unmaximizeWindow(): Promise<void>;
+  getPinned(): Promise<string[]>;
+  togglePin(sessionPath: string): Promise<string[]>;
   isMaximized(): Promise<boolean>;
   onSessionEvent(cb: (sessionKey: string, ev: SessionEvent) => void): () => void;
   onSessionsChanged(cb: (workspacePath: string) => void): () => void;

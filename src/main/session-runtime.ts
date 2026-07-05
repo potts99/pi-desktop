@@ -316,3 +316,7 @@ export async function deleteSession(sessionPath: string): Promise<void> {
   }
   if (!(await trashFile(sessionPath))) await unlink(sessionPath);
 }
+
+export async function getSessionStats(sessionKey: string) {
+  return runCommand(sessionKey, (e) => e.client.getSessionStats());
+}

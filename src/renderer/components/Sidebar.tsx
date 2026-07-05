@@ -1,14 +1,22 @@
 import type { WorkspaceGroup } from "../../shared/types.ts";
 
 export function Sidebar({
-  groups, activePath, onNewAgent, onOpen, onNew,
+  groups, activePath, pinnedPaths, onNewAgent, onOpen, onNew, onTogglePin,
 }: {
   groups: WorkspaceGroup[];
   activePath: string | null;
+  pinnedPaths: string[];
   onNewAgent: () => void;
   onOpen: (path: string) => void;
   onNew: (cwd: string) => void;
+  onTogglePin: (path: string) => void;
 }) {
+  // Collect all sessions across groups, then filter to pinned ones
+  const allSessions = groups.flatMap((g) =>
+    g.sessions.map((s) => ({ ...s, cwd: g.path })),
+  );
+  const pinned = allSessions.filter((s) => pinnedPaths.includes(s.path));
+
   return (
     <div className="sidebar">
       <div className="sidebar-top">
@@ -18,7 +26,29 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-scroll">
-        <div className="section-head">Workspaces</div>
+        {pinned.length > 0 && (
+          <>
+            <div className="section-head">Pinned</div>
+            {pinned.map((s) => (
+              <button
+                key={s.path}
+                className={`session-row${s.path === activePath ? " selected" : ""}`}
+                onClick={() => onOpen(s.path)}
+                title={s.title}
+              >
+                <span className="s-title">{s.title}</span>
+                <button
+                  className="pin-btn pinned"
+                  onClick={(e) => { e.stopPropagation(); onTogglePin(s.path); }}
+                  title="Unpin"
+                >◆</button>
+                <span className="s-sub">{s.subtitle}</span>
+              </button>
+            ))}
+            <div className="section-head">Workspaces</div>
+          </>
+        )}
+        {pinned.length === 0 && <div className="section-head">Workspaces</div>}
         {groups.length === 0 && (
           <div className="empty-hint">No workspaces yet. Add one to see its agents.</div>
         )}
@@ -28,16 +58,22 @@ export function Sidebar({
               <span className="ws-name">{g.name}</span>
               <button className="ws-new" onClick={() => onNew(g.path)}>New Agent</button>
             </div>
-            {g.sessions.map((s) => (
-              <button
-                key={s.path}
-                className={`session-row${s.path === activePath ? " selected" : ""}`}
-                onClick={() => onOpen(s.path)}
-                title={s.title}
-              >
-                <span className="s-title">{s.title}</span>
-                <span className="s-sub">{s.subtitle}</span>
-              </button>
+            {g.sessions.filter((s) => !pinnedPaths.includes(s.path)).map((s) => (
+              <div key={s.path} className="session-row-wrap">
+                <button
+                  className={`session-row${s.path === activePath ? " selected" : ""}`}
+                  onClick={() => onOpen(s.path)}
+                  title={s.title}
+                >
+                  <span className="s-title">{s.title}</span>
+                  <span className="s-sub">{s.subtitle}</span>
+                </button>
+                <button
+                  className="pin-btn"
+                  onClick={(e) => { e.stopPropagation(); onTogglePin(s.path); }}
+                  title="Pin"
+                >◇</button>
+              </div>
             ))}
           </div>
         ))}
