@@ -49,6 +49,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("setModel", (_e, key: string, provider: string, id: string) => rt.setModel(key, provider, id));
   ipcMain.handle("getSessionState", (_e, key: string) => rt.getSessionState(key));
   ipcMain.handle("setThinkingLevel", (_e, key: string, level) => rt.setThinkingLevel(key, level));
+  ipcMain.handle("setMode", (_e, key: string, mode) => rt.setMode(key, mode));
   ipcMain.handle("cycleThinkingLevel", (_e, key: string) => rt.cycleThinkingLevel(key));
   ipcMain.handle("forkSession", (_e, key: string, entryId: string) => rt.forkSession(key, entryId));
   ipcMain.handle("cloneSession", (_e, key: string) => rt.cloneSession(key));

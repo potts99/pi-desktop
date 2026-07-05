@@ -32,6 +32,8 @@ export interface ModelChoice {
   id: string;
 }
 
+export type AgentMode = "normal" | "agent" | "yolo" | "manual";
+
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export interface QueueState {
@@ -50,15 +52,16 @@ export interface RetryState {
 export interface SessionState {
   sessionPath?: string;
   thinkingLevel: ThinkingLevel;
+  mode: AgentMode;
   isStreaming: boolean;
   queue: QueueState;
 }
-
 export interface SessionReplacement {
   cancelled: boolean;
   sessionPath?: string;
   messages: TranscriptMessage[];
   thinkingLevel: ThinkingLevel;
+  mode: AgentMode;
 }
 
 // Events pushed main -> renderer for an open session.
@@ -83,6 +86,7 @@ export interface Api {
   getModels(sessionKey: string): Promise<ModelChoice[]>;
   setModel(sessionKey: string, provider: string, id: string): Promise<void>;
   getSessionState(sessionKey: string): Promise<SessionState>;
+  setMode(sessionKey: string, mode: AgentMode): Promise<AgentMode>;
   setThinkingLevel(sessionKey: string, level: ThinkingLevel): Promise<ThinkingLevel>;
   cycleThinkingLevel(sessionKey: string): Promise<ThinkingLevel | null>;
   forkSession(sessionKey: string, entryId: string): Promise<SessionReplacement>;

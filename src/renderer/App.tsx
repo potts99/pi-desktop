@@ -59,12 +59,14 @@ export default function App() {
           disabled={!s.activeKey}
           streaming={s.streaming}
           models={s.models}
+          mode={s.mode}
           thinkingLevel={s.thinkingLevel}
           thinkingLevels={s.thinkingLevels}
           queue={s.queue}
           onSend={s.send}
           onStop={s.abort}
           onModel={(p, i) => s.activeKey && window.pi.setModel(s.activeKey, p, i)}
+          onMode={s.setMode}
           onThinking={s.setThinkingLevel}
           onCycleThinking={s.cycleThinking}
         />

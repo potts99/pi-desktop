@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  AgentMode,
   TranscriptMessage,
   WorkspaceGroup,
   ModelChoice,
@@ -48,6 +49,7 @@ export function useSessions() {
   const [streamingText, setStreamingText] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [models, setModels] = useState<ModelChoice[]>([]);
+  const [mode, setModeState] = useState<AgentMode>("normal");
   const [thinkingLevel, setThinkingLevelState] = useState<ThinkingLevel>("medium");
   const [queue, setQueue] = useState<QueueState>(emptyQueue);
   const [retry, setRetry] = useState<RetryState>({ active: false });
@@ -92,6 +94,7 @@ export function useSessions() {
       else if (ev.kind === "sessionState") {
         if (ev.state.sessionPath !== undefined) setActivePath(ev.state.sessionPath ?? null);
         if (ev.state.thinkingLevel) setThinkingLevelState(ev.state.thinkingLevel);
+        if (ev.state.mode) setModeState(ev.state.mode);
         if (ev.state.isStreaming !== undefined) setStreaming(ev.state.isStreaming);
         if (ev.state.queue) setQueue(ev.state.queue);
       }
@@ -117,6 +120,7 @@ export function useSessions() {
     setActiveKey(sessionKey);
     setActivePath(state.sessionPath ?? ("path" in arg ? arg.path : null));
     setMessages(history ?? []);
+    setModeState(state.mode);
     setStreaming(state.isStreaming);
     setThinkingLevelState(state.thinkingLevel);
     setQueue(state.queue);
@@ -177,10 +181,21 @@ export function useSessions() {
     }
   }, [activeKey]);
 
+  const setMode = useCallback(async (m: AgentMode) => {
+    if (!activeKey || !window.pi) return;
+    try {
+      const applied = await window.pi.setMode(activeKey, m);
+      setModeState(applied);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [activeKey]);
+
   const applyReplacement = useCallback((replacement: SessionReplacement) => {
     if (replacement.cancelled) return;
     setActivePath(replacement.sessionPath ?? null);
     setMessages(replacement.messages);
+    setModeState(replacement.mode);
     setThinkingLevelState(replacement.thinkingLevel);
     setStreamingText("");
     setStreaming(false);
@@ -257,6 +272,7 @@ export function useSessions() {
     streaming,
     models,
     thinkingLevel,
+    mode,
     thinkingLevels,
     queue,
     retry,
@@ -266,6 +282,7 @@ export function useSessions() {
     retryLast,
     abort,
     setThinkingLevel,
+    setMode,
     cycleThinking,
     fork,
     clone,

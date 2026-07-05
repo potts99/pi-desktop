@@ -6,6 +6,7 @@ import { RpcClient } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
+  AgentMode,
   ModelChoice,
   SessionEvent,
   TranscriptMessage,
@@ -18,18 +19,19 @@ import type {
 // The package's "exports" only defines an ESM "import" condition, so resolve
 // via import.meta.resolve (ESM) — not require.resolve — then derive cli.js.
 const cliPath = join(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))), "cli.js");
-
 interface Entry {
   client: RpcClient;
   cwd: string;
   args: string[];
   sessionPath?: string;
+  mode: AgentMode;
   emit: (sessionKey: string, ev: SessionEvent) => void;
 }
 const pool = new Map<string, Entry>();
 let counter = 0;
 
 const defaultQueue = { steering: [], followUp: [] };
+const defaultMode: AgentMode = "normal";
 
 function toBlocks(msg: AgentMessage, id?: string): TranscriptMessage | null {
   if (msg.role === "user") {
@@ -169,6 +171,7 @@ async function state(entry: Entry): Promise<SessionState> {
   return {
     sessionPath: s.sessionFile,
     thinkingLevel: s.thinkingLevel,
+    mode: entry.mode,
     isStreaming: s.isStreaming,
     queue: defaultQueue,
   };
@@ -183,8 +186,7 @@ export async function openSession(
   const client = new RpcClient({ cliPath, cwd, args });
   await client.start();
 
-  const sessionKey = `s${++counter}`;
-  const entry: Entry = { client, cwd: cwd ?? "", args, sessionPath: "path" in arg ? arg.path : undefined, emit };
+  const entry: Entry = { client, cwd: cwd ?? "", args, sessionPath: "path" in arg ? arg.path : undefined, mode: defaultMode, emit };
   pool.set(sessionKey, entry);
   wireEvents(sessionKey, entry);
 
@@ -194,6 +196,7 @@ export async function openSession(
   const sessionState = await state(entry).catch(() => ({
     sessionPath: "path" in arg ? arg.path : undefined,
     thinkingLevel: "medium" as ThinkingLevel,
+    mode: defaultMode,
     isStreaming: false,
     queue: defaultQueue,
   }));
@@ -247,6 +250,18 @@ export async function cycleThinkingLevel(sessionKey: string): Promise<ThinkingLe
   return result?.level ?? null;
 }
 
+export async function setMode(sessionKey: string, mode: AgentMode): Promise<AgentMode> {
+  return runCommand(sessionKey, async (e) => {
+    e.mode = mode;
+    e.emit(sessionKey, { kind: "sessionState", state: { mode } });
+    return mode;
+  });
+}
+
+export async function getMode(sessionKey: string): Promise<AgentMode> {
+  return runCommand(sessionKey, async (e) => e.mode);
+}
+
 async function replacementState(entry: Entry): Promise<SessionReplacement> {
   const s = await state(entry);
   return {
@@ -254,13 +269,14 @@ async function replacementState(entry: Entry): Promise<SessionReplacement> {
     sessionPath: s.sessionPath,
     messages: await transcript(entry.client),
     thinkingLevel: s.thinkingLevel,
+    mode: s.mode,
   };
 }
 
 export async function forkSession(sessionKey: string, entryId: string): Promise<SessionReplacement> {
   return runCommand(sessionKey, async (e) => {
     const result = await e.client.fork(entryId);
-    if (result.cancelled) return { cancelled: true, messages: [], thinkingLevel: (await state(e)).thinkingLevel };
+    if (result.cancelled) { const s = await state(e); return { cancelled: true, messages: [], thinkingLevel: s.thinkingLevel, mode: s.mode }; }
     return replacementState(e);
   });
 }
@@ -268,7 +284,7 @@ export async function forkSession(sessionKey: string, entryId: string): Promise<
 export async function cloneSession(sessionKey: string): Promise<SessionReplacement> {
   return runCommand(sessionKey, async (e) => {
     const result = await e.client.clone();
-    if (result.cancelled) return { cancelled: true, messages: [], thinkingLevel: (await state(e)).thinkingLevel };
+    if (result.cancelled) { const s = await state(e); return { cancelled: true, messages: [], thinkingLevel: s.thinkingLevel, mode: s.mode }; }
     return replacementState(e);
   });
 }

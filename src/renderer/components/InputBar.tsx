@@ -1,28 +1,34 @@
 import { useState } from "react";
-import type { ModelChoice, QueueState, ThinkingLevel } from "../../shared/types.ts";
+import type { AgentMode, ModelChoice, QueueState, ThinkingLevel } from "../../shared/types.ts";
+
+const modes: AgentMode[] = ["normal", "agent", "yolo", "manual"];
 
 export function InputBar({
   disabled,
   streaming,
   models,
+  mode,
   thinkingLevel,
   thinkingLevels,
   queue,
   onSend,
   onStop,
   onModel,
+  onMode,
   onThinking,
   onCycleThinking,
 }: {
   disabled: boolean;
   streaming: boolean;
   models: ModelChoice[];
+  mode: AgentMode;
   thinkingLevel: ThinkingLevel;
   thinkingLevels: ThinkingLevel[];
   queue: QueueState;
   onSend: (text: string, mode: "prompt" | "steer" | "followUp") => void;
   onStop: () => void;
   onModel: (provider: string, id: string) => void;
+  onMode: (mode: AgentMode) => void;
   onThinking: (level: ThinkingLevel) => void;
   onCycleThinking: () => void;
 }) {
@@ -53,6 +59,14 @@ export function InputBar({
         />
         <div className="composer-row">
           <div className="composer-controls">
+            <select
+              className="mode-picker"
+              disabled={disabled}
+              value={mode}
+              onChange={(e) => onMode(e.target.value as AgentMode)}
+            >
+              {modes.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
             <select
               className="model-picker"
               disabled={disabled || models.length === 0}

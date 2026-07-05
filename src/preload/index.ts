@@ -12,6 +12,7 @@ const api: Api = {
   getModels: (k) => ipcRenderer.invoke("getModels", k),
   setModel: (k, p, i) => ipcRenderer.invoke("setModel", k, p, i),
   getSessionState: (k) => ipcRenderer.invoke("getSessionState", k),
+  setMode: (k, mode) => ipcRenderer.invoke("setMode", k, mode),
   setThinkingLevel: (k, level) => ipcRenderer.invoke("setThinkingLevel", k, level),
   cycleThinkingLevel: (k) => ipcRenderer.invoke("cycleThinkingLevel", k),
   forkSession: (k, entryId) => ipcRenderer.invoke("forkSession", k, entryId),

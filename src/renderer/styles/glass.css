@@ -380,7 +380,7 @@ button { font-family: inherit; }
 .composer textarea::placeholder { color: var(--cursor-text-quaternary); }
 .composer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .composer-controls, .stream-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.model-picker, .thinking-picker, .delivery-picker {
+.mode-picker, .model-picker, .thinking-picker, .delivery-picker {
   border: 1px solid var(--cursor-stroke-primary);
   background: var(--cursor-bg);
   color: var(--cursor-text-secondary);
@@ -389,6 +389,7 @@ button { font-family: inherit; }
   font-size: 12px;
   min-width: 0;
 }
+.mode-picker { max-width: 96px; }
 .model-picker { max-width: min(320px, 42vw); }
 .thinking-picker { max-width: 96px; }
 .delivery-picker { max-width: 116px; }
