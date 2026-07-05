@@ -186,6 +186,7 @@ export async function openSession(
   const client = new RpcClient({ cliPath, cwd, args });
   await client.start();
 
+  const sessionKey = `s${++counter}`;
   const entry: Entry = { client, cwd: cwd ?? "", args, sessionPath: "path" in arg ? arg.path : undefined, mode: defaultMode, emit };
   pool.set(sessionKey, entry);
   wireEvents(sessionKey, entry);
