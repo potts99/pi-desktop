@@ -125,6 +125,10 @@ export interface Api {
   minimizeWindow(): Promise<void>;
   unmaximizeWindow(): Promise<void>;
   getPinned(): Promise<string[]>;
+  getSettings(): Promise<Record<string, unknown>>;
+  getDesktopConfig(): Promise<Record<string, unknown>>;
+  updateDesktopConfig(partial: Record<string, unknown>): Promise<Record<string, unknown>>;
+  updateSettings(partial: Record<string, unknown>): Promise<Record<string, unknown>>;
   togglePin(sessionPath: string): Promise<string[]>;
   isMaximized(): Promise<boolean>;
   onSessionEvent(cb: (sessionKey: string, ev: SessionEvent) => void): () => void;

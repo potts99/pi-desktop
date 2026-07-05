@@ -1,3 +1,6 @@
+import { getDesktopConfig, updateDesktopConfig } from "./desktop-config.ts";
+import { getSettings, updateSettings } from "./settings-store.ts";
+
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import type { FSWatcher } from "node:fs";
 import { listWorkspaces, addWorkspace } from "./workspaces.ts";
@@ -58,6 +61,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("deleteSession", (_e, sessionPath: string) => rt.deleteSession(sessionPath));
   ipcMain.handle("listWorkspaceFiles", (_e, cwd: string, prefix: string) => listWorkspaceFiles(cwd, prefix));
   ipcMain.handle("getLastAssistantText", (_e, key: string) => rt.getLastAssistantText(key));
+  ipcMain.handle("getSettings", () => getSettings());
+  ipcMain.handle("getDesktopConfig", () => getDesktopConfig());
+  ipcMain.handle("updateDesktopConfig", (_e, partial) => updateDesktopConfig(partial));
+  ipcMain.handle("updateSettings", (_e, partial) => updateSettings(partial));
   ipcMain.handle("getSessionStats", (_e, key: string) => rt.getSessionStats(key));
   ipcMain.handle("getPinned", () => getPinned());
   ipcMain.handle("togglePin", (_e, path: string) => togglePin(path));

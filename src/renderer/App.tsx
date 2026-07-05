@@ -6,6 +6,7 @@ import { Transcript } from "./components/Transcript.tsx";
 import { InputBar } from "./components/InputBar.tsx";
 import { TabBar } from "./components/TabBar.tsx";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette.tsx";
+import { SettingsPanel } from "./components/SettingsPanel.tsx";
 
 const commands: PaletteCommand[] = [
   { id: "newAgent", label: "New Agent", description: "Open a new agent tab", shortcut: "\u2318N" },
@@ -18,12 +19,14 @@ const commands: PaletteCommand[] = [
   { id: "deleteAgent", label: "Delete Agent", description: "Delete the current agent session" },
   { id: "closeWindow", label: "Close Window", description: "Close the pi window", shortcut: "\u2318W" },
   { id: "minimize", label: "Minimize", description: "Minimize the window", shortcut: "\u2318M" },
+  { id: "openSettings", label: "Open Settings", description: "Configure pi settings", shortcut: "\u2318," },
   { id: "toggleSidebar", label: "Toggle Sidebar", description: "Show or hide the sidebar", shortcut: "\u2318B" },
 ];
 
 export default function App() {
   const s = useSessions();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
 
@@ -56,6 +59,7 @@ export default function App() {
         case "closeWindow": void window.pi?.closeWindow(); break;
         case "minimize": void window.pi?.minimizeWindow(); break;
         case "toggleSidebar": setSidebarOpen((v) => !v); break;
+        case "openSettings": setSettingsOpen(true); break;
       }
     },
     [s, rename, remove],
@@ -106,6 +110,7 @@ export default function App() {
             </span>
           )}
           <div className="top-actions">
+            <button onClick={() => setSettingsOpen(true)} title="Settings (\u2318,)" className="settings-gear">⚙</button>
             {!sidebarOpen && (
               <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
             )}
@@ -163,6 +168,7 @@ export default function App() {
         onClose={() => setPaletteOpen(false)}
         onExecute={executeCommand}
       />
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

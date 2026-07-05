@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { access, unlink } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { RpcClient } from "@earendil-works/pi-coding-agent";
+import { getSessionArgs } from "./desktop-config.ts";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
@@ -182,7 +183,9 @@ export async function openSession(
   emit: (sessionKey: string, ev: SessionEvent) => void,
 ): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }> {
   const cwd = "path" in arg ? undefined : arg.newIn;
-  const args = "path" in arg ? ["--session", arg.path] : [];
+  const sessionArgs = "path" in arg ? ["--session", arg.path] : [];
+  const desktopArgs = await getSessionArgs();
+  const args = [...sessionArgs, ...desktopArgs];
   const client = new RpcClient({ cliPath, cwd, args });
   await client.start();
 
