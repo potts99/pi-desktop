@@ -239,6 +239,19 @@ button { font-family: inherit; }
 .s-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cursor-text-primary); }
 .s-sub { font-size: 11px; color: var(--cursor-text-quaternary); flex-shrink: 0; }
 
+
+.session-row-wrap {
+  display: flex; align-items: center;
+}
+.session-row-wrap .session-row { flex: 1; }
+.pin-btn {
+  border: none; background: none; color: var(--cursor-text-quaternary);
+  font-size: 9px; cursor: pointer; padding: 2px 6px; opacity: 0;
+  transition: opacity 80ms ease;
+}
+.session-row-wrap:hover .pin-btn { opacity: 1; }
+.pin-btn:hover { color: var(--cursor-accent); }
+.pin-btn.pinned { opacity: 1; color: var(--cursor-accent); }
 .sidebar-footer { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--cursor-stroke-primary); }
 .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--cursor-accent); color: var(--cursor-text-on-accent);
   display: grid; place-items: center; font-size: 11px; font-weight: 600; }
