@@ -1,15 +1,68 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Folder, Trash2, Pin, Settings, ChevronDown, ChevronRight } from "lucide-react";
 import type { WorkspaceGroup } from "../../shared/types.ts";
 
 const COLLAPSED_LIMIT = 4;
+const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function StreamDot() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % BRAILLE_FRAMES.length), 80);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="streaming-dot">{BRAILLE_FRAMES[frame]}</span>;
+}
+
+function SessionRow({ path, active, streaming, pinned, title, subtitle, onOpen, onTogglePin }: {
+  path: string;
+  active: boolean;
+  streaming: boolean;
+  pinned: boolean;
+  title: string;
+  subtitle: string;
+  onOpen: (path: string) => void;
+  onTogglePin: (path: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const showPin = hovered || (pinned && !streaming);
+  const showSpinner = streaming && !hovered;
+
+  return (
+    <div
+      className="session-row-wrap"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span className="row-slot">
+        {showSpinner && <StreamDot />}
+        {showPin && (
+          <button
+            className={`pin-btn${pinned ? " pinned" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onTogglePin(path); }}
+            title={pinned ? "Unpin" : "Pin"}
+          ><Pin size={12} fill={pinned ? "currentColor" : undefined} /></button>
+        )}
+      </span>
+      <button
+        className={`session-row${active ? " selected" : ""}`}
+        onClick={() => onOpen(path)}
+        title={title}
+      >
+        <span className="s-title">{title}</span>
+        <span className="s-sub">{subtitle}</span>
+      </button>
+    </div>
+  );
+}
 
 export function Sidebar({
-  groups, activePath, pinnedPaths, onNewAgent, onAddWorkspace, onRemoveWorkspace, onOpen, onNew, onTogglePin, onOpenSettings,
+  groups, activePath, pinnedPaths, streamingPaths, onNewAgent, onAddWorkspace, onRemoveWorkspace, onOpen, onNew, onTogglePin, onOpenSettings,
 }: {
   groups: WorkspaceGroup[];
   activePath: string | null;
   pinnedPaths: string[];
+  streamingPaths: Set<string>;
   onNewAgent: () => void;
   onAddWorkspace: () => void;
   onRemoveWorkspace: (path: string) => void;
@@ -43,21 +96,17 @@ export function Sidebar({
           <>
             <div className="section-head">Pinned</div>
             {pinned.map((s) => (
-              <div key={s.path} className="session-row-wrap">
-                <button
-                  className="pin-btn pinned"
-                  onClick={(e) => { e.stopPropagation(); onTogglePin(s.path); }}
-                  title="Unpin"
-                ><Pin size={12} fill="currentColor" /></button>
-                <button
-                  className={`session-row${s.path === activePath ? " selected" : ""}`}
-                  onClick={() => onOpen(s.path)}
-                  title={s.title}
-                >
-                  <span className="s-title">{s.title}</span>
-                  <span className="s-sub">{s.subtitle}</span>
-                </button>
-              </div>
+              <SessionRow
+                key={s.path}
+                path={s.path}
+                active={s.path === activePath}
+                streaming={streamingPaths.has(s.path)}
+                pinned={true}
+                title={s.title}
+                subtitle={s.subtitle}
+                onOpen={onOpen}
+                onTogglePin={onTogglePin}
+              />
             ))}
             <div className="section-head section-head-action">
               <span>Workspaces</span>
@@ -94,21 +143,17 @@ export function Sidebar({
               return (
                 <>
                   {shown.map((s) => (
-                    <div key={s.path} className="session-row-wrap">
-                      <button
-                        className="pin-btn"
-                        onClick={(e) => { e.stopPropagation(); onTogglePin(s.path); }}
-                        title="Pin"
-                      ><Pin size={12} /></button>
-                      <button
-                        className={`session-row${s.path === activePath ? " selected" : ""}`}
-                        onClick={() => onOpen(s.path)}
-                        title={s.title}
-                      >
-                        <span className="s-title">{s.title}</span>
-                        <span className="s-sub">{s.subtitle}</span>
-                      </button>
-                    </div>
+                    <SessionRow
+                      key={s.path}
+                      path={s.path}
+                      active={s.path === activePath}
+                      streaming={streamingPaths.has(s.path)}
+                      pinned={false}
+                      title={s.title}
+                      subtitle={s.subtitle}
+                      onOpen={onOpen}
+                      onTogglePin={onTogglePin}
+                    />
                   ))}
                   {hiddenCount > 0 && (
                     <button

@@ -31,6 +31,7 @@ function installMockPi() {
     listSessions: async () => [],
     getSettings: async () => ({}),
     getModels: async () => [],
+    getSharedModels: async () => [],
     getSessionStats: async () => null,
     onSessionEvent: (cb: EventCb) => {
       eventCb = cb;

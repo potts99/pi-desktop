@@ -289,6 +289,13 @@ button { font-family: inherit; }
   color: var(--cursor-text-primary); max-width: 60%; flex-shrink: 0;
 }
 .s-sub { font-size: 11px; color: var(--cursor-text-quaternary); flex-shrink: 0; text-align: right; }
+.streaming-dot {
+  font-size: 12px; flex-shrink: 0; color: var(--cursor-accent);
+  width: 14px; text-align: center;
+}
+.row-slot {
+  width: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
 .pin-btn {
   border: none; background: none; color: var(--cursor-text-quaternary);
   cursor: pointer; padding: 4px; opacity: 0;
@@ -296,6 +303,7 @@ button { font-family: inherit; }
   flex-shrink: 0; width: 22px; height: 22px; border-radius: 4px;
 }
 .pin-btn svg { display: block; }
+.session-row-wrap:hover .streaming-dot { display: none; }
 .session-row-wrap:hover .pin-btn { opacity: 1; }
 .pin-btn:hover { color: var(--cursor-accent); }
 .pin-btn.pinned { opacity: 1; color: var(--cursor-accent); }

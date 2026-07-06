@@ -5,7 +5,7 @@ interface SettingField {
   label: string;
   description: string;
   type: "text" | "select" | "toggle" | "number" | "textarea";
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string; group?: string }[];
   placeholder?: string;
 }
 
@@ -20,8 +20,8 @@ const pages: SettingsPage[] = [
     id: "model-defaults",
     title: "Model defaults",
     fields: [
-      { key: "defaultProvider", label: "Default provider", description: "Provider used for new agents", type: "text", placeholder: "zai" },
-      { key: "defaultModel", label: "Default model", description: "Model used for new agents", type: "text", placeholder: "glm-5.2" },
+      { key: "defaultProvider", label: "Default provider", description: "Provider used for new agents", type: "select", options: [] },
+      { key: "defaultModel", label: "Default model", description: "Model used for new agents", type: "select", options: [] },
       {
         key: "defaultThinkingLevel", label: "Default thinking", description: "Thinking budget for new agents", type: "select",
         options: [
@@ -111,12 +111,30 @@ export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => vo
             <span className="toggle-slider" />
           </label>
         );
-      case "select":
+      case "select": {
+        const opts = f.options ?? [];
+        const groups = new Map<string, typeof opts>();
+        const ungrouped: typeof opts = [];
+        for (const o of opts) {
+          if (o.group) {
+            const g = groups.get(o.group) ?? [];
+            g.push(o);
+            groups.set(o.group, g);
+          } else {
+            ungrouped.push(o);
+          }
+        }
         return (
-          <select className="settings-select" value={String(val ?? f.options?.[0]?.value ?? "")} onChange={(e) => update(f.key, e.target.value)}>
-            {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <select className="settings-select" value={String(val ?? opts[0]?.value ?? "")} onChange={(e) => update(f.key, e.target.value)}>
+            {ungrouped.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {[...groups.entries()].map(([group, groupOpts]) => (
+              <optgroup key={group} label={group}>
+                {groupOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            ))}
           </select>
         );
+      }
       case "number":
         return <input className="settings-input" type="number" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, Number(e.target.value))} />;
       default:
@@ -147,22 +165,34 @@ export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => vo
           ))}
         </div>
         <div className="settings-content">
-          {activePageDef?.fields && (
-            <div className="settings-section">
-              <h3 className="settings-section-title">{activePageDef.title}</h3>
-              {activePageDef.fields.map((f) => (
-                <div key={f.key} className="settings-row">
-                  <div className="settings-info">
-                    <span className="settings-label">{f.label}</span>
-                    <span className="settings-desc">{f.description}</span>
+          {activePageDef?.fields && (() => {
+            const providerOptions = [...new Set(sharedModels.map((m) => m.provider))].map((p) => ({ value: p, label: p }));
+            const selectedProvider = settings.defaultProvider as string | undefined;
+            const modelOptions = sharedModels
+              .filter((m) => !selectedProvider || m.provider === selectedProvider)
+              .map((m) => ({ value: `${m.provider}/${m.id}`, label: m.id, group: m.provider }));
+            const resolvedFields = activePageDef.fields.map((f) => {
+              if (f.key === "defaultProvider") return { ...f, options: providerOptions };
+              if (f.key === "defaultModel") return { ...f, options: modelOptions };
+              return f;
+            });
+            return (
+              <div className="settings-section">
+                <h3 className="settings-section-title">{activePageDef.title}</h3>
+                {resolvedFields.map((f) => (
+                  <div key={f.key} className="settings-row">
+                    <div className="settings-info">
+                      <span className="settings-label">{f.label}</span>
+                      <span className="settings-desc">{f.description}</span>
+                    </div>
+                    <div className="settings-control">
+                      {renderField(f)}
+                    </div>
                   </div>
-                  <div className="settings-control">
-                    {renderField(f)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
           {activePage === "models" && (
             <div className="settings-section">
               <h3 className="settings-section-title">Models</h3>

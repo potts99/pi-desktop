@@ -26,6 +26,7 @@ import type {
 // unpacks node_modules beside it, so point the subprocess at the real path.
 const resolvedCliPath = join(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))), "cli.js");
 const cliPath = resolvedCliPath.replace("/app.asar/", "/app.asar.unpacked/");
+
 interface Entry {
   client: RpcClient;
   cwd: string;
@@ -41,6 +42,14 @@ const defaultQueue = { steering: [], followUp: [] };
 const defaultMode: AgentMode = "normal";
 const sharedModelsPath = join(homedir(), ".pi", "agent", "models.json");
 let cachedAgentEnv: Record<string, string> | null = null;
+// ponytail: cache ModelRegistry models to avoid re-reading models.json on every fetch.
+// Ceiling: a provider/model added mid-session won't appear until app restart.
+let cachedRegistryModels: ModelChoice[] | null = null;
+
+// ponytail: pre-warm agent env at module load so first session open doesn't block on nvm scan.
+// Must run AFTER the `let cachedAgentEnv` declaration above — accessing it before
+// initialization is a temporal-dead-zone error that the .catch() would silently swallow.
+agentEnv().catch(() => {});
 
 interface SharedModelsFile {
   providers?: Record<string, { models?: Array<{ id?: unknown }> }>;
@@ -255,28 +264,43 @@ export async function openSession(
 ): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }> {
   const cwd = "path" in arg ? undefined : arg.newIn;
   const sessionArgs = "path" in arg ? ["--session", arg.path] : [];
-  const desktopArgs = await getSessionArgs();
+  const isExisting = "path" in arg;
+  // ponytail: both reads are cached after first call; parallel in case of a cache miss
+  const [desktopArgs, env] = await Promise.all([getSessionArgs(), agentEnv()]);
   const args = [...sessionArgs, ...desktopArgs];
-  const client = new RpcClient({ cliPath, cwd, args, env: await agentEnv() });
+  const client = new RpcClient({ cliPath, cwd, args, env });
   await client.start();
 
   const sessionKey = `s${++counter}`;
-  const entry: Entry = { client, cwd: cwd ?? "", args, sessionPath: "path" in arg ? arg.path : undefined, mode: defaultMode, emit };
+  const entry: Entry = { client, cwd: cwd ?? "", args, sessionPath: isExisting ? arg.path : undefined, mode: defaultMode, emit };
   pool.set(sessionKey, entry);
   wireEvents(sessionKey, entry);
 
-  // Return existing history synchronously so the renderer applies it the moment
-  // the session becomes active — avoids a race with the live-event key guard.
-  const history = "path" in arg ? await transcript(client) : [];
+  if (isExisting) {
+    // ponytail: parallelize transcript + state RPC calls — two independent round-trips
+    const [history, sessionState] = await Promise.all([
+      transcript(client),
+      state(entry).catch(() => ({
+        sessionPath: arg.path,
+        thinkingLevel: "medium" as ThinkingLevel,
+        mode: defaultMode,
+        isStreaming: false,
+        queue: defaultQueue,
+      })),
+    ]);
+    return { sessionKey, messages: history, state: sessionState };
+  }
+
+  // New session: no history to load, just get state
   const sessionState = await state(entry).catch(() => ({
-    sessionPath: "path" in arg ? arg.path : undefined,
+    sessionPath: undefined,
     thinkingLevel: "medium" as ThinkingLevel,
     mode: defaultMode,
     isStreaming: false,
     queue: defaultQueue,
   }));
 
-  return { sessionKey, messages: history, state: sessionState };
+  return { sessionKey, messages: [], state: sessionState };
 }
 
 export async function closeSession(sessionKey: string): Promise<void> {
@@ -302,15 +326,19 @@ export async function abortSession(sessionKey: string): Promise<void> {
   await runCommand(sessionKey, (e) => e.client.abort());
 }
 
-export async function getAllModelChoices(sessionKey?: string): Promise<ModelChoice[]> {
-  // Read models directly from ModelRegistry — no running session needed.
+function getRegistryModels(): ModelChoice[] {
+  if (cachedRegistryModels) return cachedRegistryModels;
   const agentDir = join(homedir(), ".pi", "agent");
   const authStorage = AuthStorage.create(agentDir);
   const registry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
-  const models = registry.getAvailable()
+  cachedRegistryModels = registry.getAvailable()
     .map((m) => ({ provider: m.provider, id: m.id }));
+  return cachedRegistryModels;
+}
 
-  // If there's an active session, also merge its dynamically discovered models.
+export async function getAllModelChoices(sessionKey?: string): Promise<ModelChoice[]> {
+  const models = getRegistryModels();
+
   if (sessionKey) {
     try {
       const runtimeModels = await runCommand(sessionKey, (e) => e.client.getAvailableModels());

@@ -134,6 +134,7 @@ export default function App() {
               groups={s.groups}
               activePath={s.activePath}
               pinnedPaths={pinnedPaths}
+              streamingPaths={new Set(s.tabs.filter(t => t.streaming).map(t => t.sessionPath).filter(Boolean) as string[])}
               onNewAgent={s.newAgent}
               onAddWorkspace={s.addWorkspace}
               onRemoveWorkspace={s.removeWorkspace}
@@ -193,7 +194,7 @@ export default function App() {
                 <div className="empty-sub">Opening agent…</div>
               </div>
             ) : s.activeKey ? (
-              <Transcript messages={s.messages} streamingText={s.streamingText} onFork={s.fork} />
+              <Transcript messages={s.messages} streamingText={s.streamingText} streaming={s.streaming} onFork={s.fork} />
             ) : (
               <div className="empty-state">
                 <div className="empty-title">pi</div>

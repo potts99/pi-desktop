@@ -110,16 +110,27 @@ export function useSessions() {
 
   useEffect(() => { refreshWorkspaces(); }, [refreshWorkspaces]);
   useEffect(() => window.pi?.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
+  // ponytail: pre-fetch models once at mount so freshly-opened tabs show the full picker
+  // immediately. Shared list is the superset; default model is fallback only when empty.
   useEffect(() => {
-    window.pi?.getSettings()
-      .then((settings) => {
+    if (!window.pi) return;
+    let cancelled = false;
+    void Promise.all([
+      window.pi.getSettings().catch(() => ({}) as Record<string, unknown>),
+      window.pi.getSharedModels().catch(() => [] as ModelChoice[]),
+    ]).then(([settings, models]) => {
+      if (cancelled) return;
+      if (models.length > 0) {
+        setDefaultModels(models);
+      } else {
         const provider = settings.defaultProvider;
         const id = settings.defaultModel;
         if (typeof provider === "string" && typeof id === "string" && provider && id) {
           setDefaultModels([{ provider, id }]);
         }
-      })
-      .catch(() => {});
+      }
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // Session events dispatch to whichever tab owns the session key.
