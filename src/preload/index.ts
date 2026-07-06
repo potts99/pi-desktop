@@ -4,6 +4,7 @@ import type { Api, SessionEvent } from "../shared/types.ts";
 const api: Api = {
   listWorkspaces: () => ipcRenderer.invoke("listWorkspaces"),
   addWorkspace: () => ipcRenderer.invoke("addWorkspace"),
+  removeWorkspace: (path) => ipcRenderer.invoke("removeWorkspace", path),
   listSessions: (p) => ipcRenderer.invoke("listSessions", p),
   listWorkspaceFiles: (cwd, prefix) => ipcRenderer.invoke("listWorkspaceFiles", cwd, prefix),
   openSession: (arg) => ipcRenderer.invoke("openSession", arg),
@@ -11,6 +12,7 @@ const api: Api = {
   sendPrompt: (k, t, mode) => ipcRenderer.invoke("sendPrompt", k, t, mode),
   abortSession: (k) => ipcRenderer.invoke("abortSession", k),
   getModels: (k) => ipcRenderer.invoke("getModels", k),
+  getSharedModels: (sessionKey) => ipcRenderer.invoke("getSharedModels", sessionKey),
   setModel: (k, p, i) => ipcRenderer.invoke("setModel", k, p, i),
   getSessionState: (k) => ipcRenderer.invoke("getSessionState", k),
   setMode: (k, mode) => ipcRenderer.invoke("setMode", k, mode),
@@ -33,6 +35,9 @@ const api: Api = {
   minimizeWindow: () => ipcRenderer.invoke("minimizeWindow"),
   unmaximizeWindow: () => ipcRenderer.invoke("unmaximizeWindow"),
   isMaximized: () => ipcRenderer.invoke("isMaximized"),
+  isFullScreen: () => ipcRenderer.invoke("isFullScreen"),
+  openInVSCode: (path) => ipcRenderer.invoke("openInVSCode", path),
+  isVSCodeAvailable: () => ipcRenderer.invoke("isVSCodeAvailable"),
   onSessionEvent: (cb) => {
     const h = (_e: unknown, key: string, ev: SessionEvent) => cb(key, ev);
     ipcRenderer.on("session-event", h);

@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import { access, readFile, readdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { spawn } from "node:child_process";
-import { RpcClient } from "@earendil-works/pi-coding-agent";
+import { RpcClient, ModelRegistry, AuthStorage } from "@earendil-works/pi-coding-agent";
 import { getSessionArgs } from "./desktop-config.ts";
+import { getSettings } from "./settings-store.ts";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
@@ -96,7 +97,8 @@ function toBlocks(msg: AgentMessage, id?: string): TranscriptMessage | null {
   }
   if (msg.role === "toolResult") {
     const text = msg.content.map((c) => ("text" in c ? c.text : "[non-text]")).join("");
-    return { id, role: "tool", blocks: [{ kind: "toolResult", toolCallId: msg.toolCallId, toolName: msg.toolName, text, isError: msg.isError }] };
+    const diff = (msg.details as { diff?: string } | undefined)?.diff;
+    return { id, role: "tool", blocks: [{ kind: "toolResult", toolCallId: msg.toolCallId, toolName: msg.toolName, text, isError: msg.isError, diff }] };
   }
   return null;
 }
@@ -129,7 +131,7 @@ async function transcript(client: RpcClient): Promise<TranscriptMessage[]> {
   }
 }
 
-async function sharedModelChoices(): Promise<ModelChoice[]> {
+export async function sharedModelChoices(): Promise<ModelChoice[]> {
   try {
     const cfg = JSON.parse(await readFile(sharedModelsPath, "utf-8")) as SharedModelsFile;
     return Object.entries(cfg.providers ?? {}).flatMap(([provider, value]) =>
@@ -236,12 +238,14 @@ async function runCommand<T>(sessionKey: string, fn: (entry: Entry) => Promise<T
 async function state(entry: Entry): Promise<SessionState> {
   const s = await entry.client.getState();
   entry.sessionPath = s.sessionFile;
+  const model = s.model ? { provider: s.model.provider, id: s.model.id } : undefined;
   return {
     sessionPath: s.sessionFile,
     thinkingLevel: s.thinkingLevel,
     mode: entry.mode,
     isStreaming: s.isStreaming,
     queue: defaultQueue,
+    model,
   };
 }
 
@@ -298,10 +302,32 @@ export async function abortSession(sessionKey: string): Promise<void> {
   await runCommand(sessionKey, (e) => e.client.abort());
 }
 
+export async function getAllModelChoices(sessionKey?: string): Promise<ModelChoice[]> {
+  // Read models directly from ModelRegistry — no running session needed.
+  const agentDir = join(homedir(), ".pi", "agent");
+  const authStorage = AuthStorage.create(agentDir);
+  const registry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
+  const models = registry.getAvailable()
+    .map((m) => ({ provider: m.provider, id: m.id }));
+
+  // If there's an active session, also merge its dynamically discovered models.
+  if (sessionKey) {
+    try {
+      const runtimeModels = await runCommand(sessionKey, (e) => e.client.getAvailableModels());
+      const runtime = runtimeModels.map((m) => ({ provider: m.provider, id: m.id }));
+      return uniqueModels([...models, ...runtime]);
+    } catch {
+      // fall through — already have ModelRegistry models
+    }
+  }
+  return uniqueModels(models);
+}
+
 export async function getModels(sessionKey: string): Promise<ModelChoice[]> {
-  const models = await runCommand(sessionKey, (e) => e.client.getAvailableModels());
-  const available = models.map((m) => ({ provider: m.provider, id: m.id }));
-  return uniqueModels([...await sharedModelChoices(), ...available]);
+  const settings = await getSettings();
+  const hidden = new Set(settings.hiddenModels ?? []);
+  return (await getAllModelChoices(sessionKey))
+    .filter((m) => !hidden.has(`${m.provider}/${m.id}`));
 }
 
 export async function setModel(sessionKey: string, provider: string, id: string): Promise<void> {

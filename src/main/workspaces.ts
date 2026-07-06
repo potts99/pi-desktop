@@ -19,3 +19,9 @@ export function addWorkspace(path: string): string[] {
   writeFileSync(file(), JSON.stringify(cur, null, 2));
   return cur;
 }
+
+export function removeWorkspace(path: string): string[] {
+  const cur = listWorkspaces().filter((p) => p !== path);
+  writeFileSync(file(), JSON.stringify(cur, null, 2));
+  return cur;
+}

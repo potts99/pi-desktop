@@ -4,7 +4,6 @@ import { useSessions } from "./state/useSessions.ts";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { Transcript } from "./components/Transcript.tsx";
 import { InputBar } from "./components/InputBar.tsx";
-import { TabBar } from "./components/TabBar.tsx";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette.tsx";
 import { SettingsPanel } from "./components/SettingsPanel.tsx";
 
@@ -22,6 +21,17 @@ const commands: PaletteCommand[] = [
   { id: "openSettings", label: "Open Settings", description: "Configure pi settings", shortcut: "\u2318," },
   { id: "toggleSidebar", label: "Toggle Sidebar", description: "Show or hide the sidebar", shortcut: "\u2318B" },
 ];
+
+const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function PISpinner() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % BRAILLE_FRAMES.length), 80);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="pi-spinner">{BRAILLE_FRAMES[frame]}</span>;
+}
 
 function compactNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "--";
@@ -45,8 +55,23 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
+  const [vscodeAvailable, setVscodeAvailable] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const [m, f] = await Promise.all([window.pi?.isMaximized(), window.pi?.isFullScreen()]);
+        setMaximized(!!(m || f));
+      } catch {}
+    };
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => { window.pi?.getPinned().then(setPinnedPaths).catch(() => {}); }, []);
+  useEffect(() => { window.pi?.isVSCodeAvailable().then(setVscodeAvailable).catch(() => {}); }, []);
 
   const togglePin = useCallback((path: string) => {
     window.pi?.togglePin(path).then(setPinnedPaths).catch(() => {});
@@ -90,6 +115,7 @@ export default function App() {
       if (!mod) return;
       if (e.key === "n" && !e.shiftKey) { e.preventDefault(); void s.newAgent(); }
       else if (e.key === "w") { e.preventDefault(); s.closeTab(s.activeIdx); }
+      else if (e.key === "b") { e.preventDefault(); setSidebarOpen((v) => !v); }
       else if (e.key === "]" && e.shiftKey) { e.preventDefault(); s.nextTab(); }
       else if (e.key === "[" && e.shiftKey) { e.preventDefault(); s.prevTab(); }
     }
@@ -98,57 +124,59 @@ export default function App() {
   }, [s, paletteOpen]);
 
   return (
-    <div className="app">
-      {sidebarOpen && (
-        <Sidebar
-          groups={s.groups}
-          activePath={s.activePath}
-          pinnedPaths={pinnedPaths}
-          onNewAgent={s.newAgent}
-          onAddWorkspace={s.addWorkspace}
-          onOpen={(path) => s.openSession({ path })}
-          onNew={(cwd) => s.openSession({ newIn: cwd })}
-          onTogglePin={togglePin}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      )}
-      <div className="main-pane">
-        {settingsOpen ? (
-          <>
-            <div className="topbar settings-main-topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
-              <span className="crumb">Settings</span>
-              <div className="top-actions">
-                {!sidebarOpen && (
-                  <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
-                )}
-                <button onClick={() => setSettingsOpen(false)}>Done</button>
-              </div>
-            </div>
-            <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-          </>
-        ) : (
-          <>
+    <>
+      {settingsOpen ? (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} activeSessionKey={s.activeKey ?? undefined} />
+      ) : (
+        <div className={`app${sidebarOpen ? "" : " no-sidebar"}${maximized ? " maximized" : ""}`}>
+          {sidebarOpen && (
+            <Sidebar
+              groups={s.groups}
+              activePath={s.activePath}
+              pinnedPaths={pinnedPaths}
+              onNewAgent={s.newAgent}
+              onAddWorkspace={s.addWorkspace}
+              onRemoveWorkspace={s.removeWorkspace}
+              onOpen={(path) => s.openSession({ path })}
+              onNew={(cwd) => s.openSession({ newIn: cwd })}
+              onTogglePin={togglePin}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+          )}
+          <div className="main-pane">
             <div className="topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
-              <TabBar
-                tabs={s.tabs}
-                activeIdx={s.activeIdx}
-                onActivate={s.activateTab}
-                onClose={s.closeTab}
-              />
+              <div className="top-actions">
+                <button onClick={() => setSidebarOpen((v) => !v)} title="Toggle sidebar (\u2318B)">
+                  {sidebarOpen ? "«" : "»"}
+                </button>
+              </div>
+              {s.activeKey && s.activeTitle && (
+                <span className="topbar-title" onClick={() => setSidebarOpen((v) => !v)} title="Toggle sidebar (\u2318B)">{s.activeTitle}</span>
+              )}
               {s.activeKey && (
-                <span className="session-stats">
+                <div className="topbar-right">
+                  {vscodeAvailable && (
+                    <button
+                      className="vscode-btn"
+                      title="Open workspace in VS Code"
+                      onClick={() => {
+                        const cwd = s.groups.find((g) => g.sessions.some((r) => r.path === s.activePath))?.path;
+                        if (cwd) void window.pi?.openInVSCode(cwd);
+                      }}
+                    >
+                      VS Code
+                    </button>
+                  )}
+                  <span className="session-stats">
                   <span>↑{compactNumber(s.stats?.tokens.input)}</span>
                   <span>↓{compactNumber(s.stats?.tokens.output)}</span>
                   <span>R{compactNumber(s.stats?.tokens.cacheRead)}</span>
                   <span>W{compactNumber(s.stats?.tokens.cacheWrite)}</span>
+                  <span className="stat-cost">${(s.stats?.cost ?? 0).toFixed(4)}</span>
                   <span className="stat-context">{contextText(s.stats)}</span>
                 </span>
+                </div>
               )}
-              <div className="top-actions">
-                {!sidebarOpen && (
-                  <button onClick={() => setSidebarOpen(true)} title="Show sidebar (\u2318B)">Sidebar</button>
-                )}
-              </div>
             </div>
             {(s.error || s.retry.active) && (
               <div className={`status-banner ${s.error ? "status-error" : ""}`}>
@@ -161,7 +189,7 @@ export default function App() {
             )}
             {s.opening ? (
               <div className="empty-state">
-                <div className="spinner" />
+                <PISpinner />
                 <div className="empty-sub">Opening agent…</div>
               </div>
             ) : s.activeKey ? (
@@ -176,27 +204,26 @@ export default function App() {
               disabled={!s.activeKey}
               streaming={s.streaming}
               models={s.models}
-              mode={s.mode}
+              activeModel={s.activeModel}
               cwd={s.groups.find((g) => g.sessions.some((r) => r.path === s.activePath))?.path ?? null}
               thinkingLevel={s.thinkingLevel}
               thinkingLevels={s.thinkingLevels}
               queue={s.queue}
               onSend={s.send}
               onStop={s.abort}
-              onModel={(p, i) => s.activeKey && window.pi.setModel(s.activeKey, p, i)}
-              onMode={s.setMode}
+              onModel={s.setModel}
               onThinking={s.setThinkingLevel}
               onCycleThinking={s.cycleThinking}
             />
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
       <CommandPalette
         open={paletteOpen}
         commands={commands}
         onClose={() => setPaletteOpen(false)}
         onExecute={executeCommand}
       />
-    </div>
+    </>
   );
 }

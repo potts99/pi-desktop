@@ -1,7 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import type { AgentMode, ModelChoice, QueueState, ThinkingLevel } from "../../shared/types.ts";
+import type { ModelChoice, QueueState, ThinkingLevel } from "../../shared/types.ts";
 
-const modes: AgentMode[] = ["normal", "agent", "yolo", "manual"];
 const maxTextareaHeight = 240;
 
 interface SlashCommand {
@@ -27,7 +26,7 @@ export function InputBar({
   disabled,
   streaming,
   models,
-  mode,
+  activeModel,
   cwd,
   thinkingLevel,
   thinkingLevels,
@@ -35,14 +34,13 @@ export function InputBar({
   onSend,
   onStop,
   onModel,
-  onMode,
   onThinking,
   onCycleThinking,
 }: {
   disabled: boolean;
   streaming: boolean;
   models: ModelChoice[];
-  mode: AgentMode;
+  activeModel: ModelChoice | null;
   cwd: string | null;
   thinkingLevel: ThinkingLevel;
   thinkingLevels: ThinkingLevel[];
@@ -50,11 +48,10 @@ export function InputBar({
   onSend: (text: string, mode: "prompt" | "steer" | "followUp") => void;
   onStop: () => void;
   onModel: (provider: string, id: string) => void;
-  onMode: (mode: AgentMode) => void;
   onThinking: (level: ThinkingLevel) => void;
   onCycleThinking: () => void;
 }) {
-  const [contextOpen, setContextOpen] = useState(false);
+
 
   // File drag-drop
   const [dragOver, setDragOver] = useState(false);
@@ -87,7 +84,6 @@ export function InputBar({
     }
   };
   const [text, setText] = useState("");
-  const [streamMode, setStreamMode] = useState<"steer" | "followUp">("steer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustTextareaHeight = useCallback(() => {
@@ -243,7 +239,7 @@ export function InputBar({
 
   const submit = () => {
     if (text.trim()) {
-      onSend(text.trim(), streaming ? streamMode : "prompt");
+      onSend(text.trim(), streaming ? "steer" : "prompt");
       setText("");
       requestAnimationFrame(adjustTextareaHeight);
       closeSlash();
@@ -314,18 +310,14 @@ export function InputBar({
         <div className="composer-row">
           <div className="composer-controls">
             <select
-              className="mode-picker"
-              disabled={disabled}
-              value={mode}
-              onChange={(e) => onMode(e.target.value as AgentMode)}
-            >
-              {modes.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select
               className="model-picker"
               disabled={disabled || models.length === 0}
+              value={activeModel ? models.findIndex((m) => m.provider === activeModel.provider && m.id === activeModel.id) : -1}
               onChange={(e) => { const m = models[Number(e.target.value)]; if (m) onModel(m.provider, m.id); }}
             >
+              {activeModel && !models.some((m) => m.provider === activeModel.provider && m.id === activeModel.id) && (
+                <option value={-1}>{activeModel.provider}/{activeModel.id}</option>
+              )}
               {models.map((m, i) => <option key={`${m.provider}/${m.id}`} value={i}>{m.provider}/{m.id}</option>)}
             </select>
             <select
@@ -337,32 +329,8 @@ export function InputBar({
             >
               {thinkingLevels.map((level) => <option key={level} value={level}>{level}</option>)}
             </select>
-            {streaming && (
-              <select className="delivery-picker" value={streamMode} onChange={(e) => setStreamMode(e.target.value as "steer" | "followUp")}>
-                <option value="steer">steer</option>
-                <option value="followUp">follow-up</option>
-              </select>
-            )}
           </div>
-          <div className="context-btn-wrap">
-            <button
-              className="context-btn"
-              disabled={disabled}
-              title="Add context"
-              onClick={() => setContextOpen((o) => !o)}
-            >
-              +
-            </button>
-            {contextOpen && (
-              <div className="context-menu">
-                <div className="context-menu-item" onClick={() => { setText((t) => t ? `${t}\n[file: ]` : "[file: ]"); setContextOpen(false); }}>Add files</div>
-                <div className="context-menu-item" onClick={() => { setText((t) => t ? `${t}\n[folder: ]` : "[folder: ]"); setContextOpen(false); }}>Add folder</div>
-                <div className="context-menu-item" onClick={() => { setText((t) => t ? `${t}\n[symbol: ]` : "[symbol: ]"); setContextOpen(false); }}>Add symbol</div>
-                <div className="divider" />
-                <div className="context-menu-item" onClick={() => { setText((t) => t ? `${t}\n[web search: ]` : "[web search: ]"); setContextOpen(false); }}>Web search</div>
-              </div>
-            )}
-          </div>
+
           <button
             className={`send-btn${showStop ? " stop-btn" : ""}`}
             disabled={showStop ? disabled : !canSubmit}

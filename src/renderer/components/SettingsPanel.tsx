@@ -9,8 +9,15 @@ interface SettingField {
   placeholder?: string;
 }
 
-const sections: { title: string; fields: SettingField[] }[] = [
+interface SettingsPage {
+  id: string;
+  title: string;
+  fields?: SettingField[];
+}
+
+const pages: SettingsPage[] = [
   {
+    id: "model-defaults",
     title: "Model defaults",
     fields: [
       { key: "defaultProvider", label: "Default provider", description: "Provider used for new agents", type: "text", placeholder: "zai" },
@@ -26,6 +33,7 @@ const sections: { title: string; fields: SettingField[] }[] = [
     ],
   },
   {
+    id: "appearance",
     title: "Appearance",
     fields: [
       { key: "theme", label: "Theme", description: "UI color theme", type: "select", options: [{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }] },
@@ -35,6 +43,7 @@ const sections: { title: string; fields: SettingField[] }[] = [
     ],
   },
   {
+    id: "behavior",
     title: "Behavior",
     fields: [
       {
@@ -53,26 +62,30 @@ const sections: { title: string; fields: SettingField[] }[] = [
       },
     ],
   },
+  { id: "models", title: "Models" },
+  { id: "system-prompt", title: "System Prompt" },
 ];
 
-const sectionId = (title: string) => `settings-${title.toLowerCase().replace(/\s+/g, "-")}`;
-
-export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => void; activeSessionKey?: string }) {
   const [settings, setSettings] = useState<Record<string, unknown>>({});
   const [desktopConfig, setDesktopConfig] = useState<Record<string, unknown>>({});
   const [systemPrompt, setSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sharedModels, setSharedModels] = useState<Array<{ provider: string; id: string }>>([]);
+  const [activePage, setActivePage] = useState(pages[0].id);
 
   useEffect(() => {
-    if (open) {
-      window.pi?.getSettings().then(setSettings).catch(() => {});
-      window.pi?.getDesktopConfig().then((cfg) => {
-        setDesktopConfig(cfg);
-        setSystemPrompt(String(cfg.systemPrompt ?? ""));
-      }).catch(() => {});
-    }
-  }, [open]);
+    window.pi?.getSettings().then(setSettings).catch(() => {});
+    window.pi?.getDesktopConfig().then((cfg) => {
+      setDesktopConfig(cfg);
+      setSystemPrompt(String(cfg.systemPrompt ?? ""));
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    window.pi?.getSharedModels(activeSessionKey).then(setSharedModels).catch(() => {});
+  }, [activeSessionKey]);
 
   const update = useCallback(async (key: string, value: unknown) => {
     setSettings((s) => ({ ...s, [key]: value }));
@@ -82,14 +95,11 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch {
-      // revert on failure
       window.pi?.getSettings().then(setSettings).catch(() => {});
     } finally {
       setSaving(false);
     }
   }, []);
-
-  if (!open) return null;
 
   const renderField = (f: SettingField) => {
     const val = settings[f.key];
@@ -114,32 +124,33 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     }
   };
 
+  const activePageDef = pages.find((p) => p.id === activePage);
+
   return (
-    <div className="settings-panel">
+    <div className="settings-layout">
+      <div className="settings-topbar" onDoubleClick={async () => { const m = await window.pi?.isMaximized(); m ? window.pi?.unmaximizeWindow() : window.pi?.maximizeWindow(); }}>
+        <button className="settings-back-btn" onClick={onClose} title="Back">
+          <span className="settings-back-arrow">←</span>
+        </button>
+        <span className="settings-title">Settings</span>
+      </div>
       <div className="settings-body">
-        <div className="settings-nav" aria-label="Settings sections">
-          <div className="section-head">Settings</div>
-          {sections.map((section) => (
+        <div className="settings-nav" aria-label="Settings pages">
+          {pages.map((page) => (
             <button
-              key={section.title}
-              className="settings-nav-item"
-              onClick={() => document.getElementById(sectionId(section.title))?.scrollIntoView({ block: "start" })}
+              key={page.id}
+              className={`settings-nav-item${activePage === page.id ? " settings-nav-active" : ""}`}
+              onClick={() => setActivePage(page.id)}
             >
-              {section.title}
+              {page.title}
             </button>
           ))}
-          <button
-            className="settings-nav-item"
-            onClick={() => document.getElementById("settings-system-prompt")?.scrollIntoView({ block: "start" })}
-          >
-            System Prompt
-          </button>
         </div>
         <div className="settings-content">
-          {sections.map((section) => (
-            <div key={section.title} id={sectionId(section.title)} className="settings-section">
-              <h3 className="settings-section-title">{section.title}</h3>
-              {section.fields.map((f) => (
+          {activePageDef?.fields && (
+            <div className="settings-section">
+              <h3 className="settings-section-title">{activePageDef.title}</h3>
+              {activePageDef.fields.map((f) => (
                 <div key={f.key} className="settings-row">
                   <div className="settings-info">
                     <span className="settings-label">{f.label}</span>
@@ -151,26 +162,69 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                 </div>
               ))}
             </div>
-          ))}
-          <div id="settings-system-prompt" className="settings-section">
-            <h3 className="settings-section-title">System Prompt</h3>
-            <div className="settings-row system-prompt-row">
-              <div className="settings-info" style={{ width: "100%" }}>
-                <span className="settings-label">Custom system prompt</span>
-                <span className="settings-desc">Appended to every new agent session via --append-system-prompt. Existing sessions are unaffected.</span>
-                <textarea
-                  className="settings-textarea"
-                  value={systemPrompt}
-                  placeholder="e.g. You are an expert TypeScript developer. Always use strict mode."
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  onBlur={() => {
-                    void window.pi?.updateDesktopConfig({ systemPrompt: systemPrompt || undefined }).then(setDesktopConfig).catch(() => {});
-                  }}
-                  rows={5}
-                />
+          )}
+          {activePage === "models" && (
+            <div className="settings-section">
+              <h3 className="settings-section-title">Models</h3>
+              <p className="settings-desc" style={{ marginBottom: 12 }}>Toggle models on or off. Hidden models won't appear in the composer picker.</p>
+              {sharedModels.length === 0 && (
+                <div className="settings-desc" style={{ color: "var(--cursor-text-quaternary)" }}>No models found.</div>
+              )}
+              {Object.entries(
+                sharedModels.reduce<Record<string, typeof sharedModels>>((groups, m) => {
+                  (groups[m.provider] ??= []).push(m);
+                  return groups;
+                }, {})
+              ).map(([provider, models]) => (
+                <div key={provider} className="model-provider-group">
+                  <h4 className="model-provider-title">{provider}</h4>
+                  {models.map((m) => {
+                    const key = `${m.provider}/${m.id}`;
+                    const hidden = ((settings.hiddenModels as string[] | undefined) ?? []).includes(key);
+                    const toggleModel = (show: boolean) => {
+                      const cur = (settings.hiddenModels as string[] | undefined) ?? [];
+                      const next = show ? cur.filter((h) => h !== key) : [...cur, key];
+                      void update("hiddenModels", next.length > 0 ? next : undefined);
+                    };
+                    return (
+                      <div key={key} className="settings-row">
+                        <div className="settings-info">
+                          <span className="settings-label" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{m.id}</span>
+                        </div>
+                        <div className="settings-control">
+                          <label className="settings-toggle">
+                            <input type="checkbox" checked={!hidden} onChange={(e) => toggleModel(e.target.checked)} />
+                            <span className="toggle-slider" />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+          {activePage === "system-prompt" && (
+            <div className="settings-section">
+              <h3 className="settings-section-title">System Prompt</h3>
+              <div className="settings-row system-prompt-row">
+                <div className="settings-info" style={{ width: "100%" }}>
+                  <span className="settings-label">Custom system prompt</span>
+                  <span className="settings-desc">Appended to every new agent session via --append-system-prompt. Existing sessions are unaffected.</span>
+                  <textarea
+                    className="settings-textarea"
+                    value={systemPrompt}
+                    placeholder="e.g. You are an expert TypeScript developer. Always use strict mode."
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    onBlur={() => {
+                      void window.pi?.updateDesktopConfig({ systemPrompt: systemPrompt || undefined }).then(setDesktopConfig).catch(() => {});
+                    }}
+                    rows={5}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       <div className="settings-footer">

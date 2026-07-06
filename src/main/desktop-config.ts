@@ -28,15 +28,25 @@ export async function updateDesktopConfig(partial: Partial<DesktopConfig>): Prom
   const cfg = await read();
   const merged = { ...cfg, ...partial };
   await write(merged);
+  invalidateSessionArgsCache();
   return merged;
+}
+
+// ponytail: cached config args, invalidated on update
+let cachedArgs: string[] | null = null;
+
+function invalidateSessionArgsCache(): void {
+  cachedArgs = null;
 }
 
 /** Build extra CLI args to pass to new pi sessions from desktop config. */
 export async function getSessionArgs(): Promise<string[]> {
+  if (cachedArgs !== null) return cachedArgs;
   const cfg = await read();
   const args: string[] = [];
   if (cfg.systemPrompt?.trim()) {
     args.push("--append-system-prompt", cfg.systemPrompt.trim());
   }
+  cachedArgs = args;
   return args;
 }

@@ -32,6 +32,7 @@ export interface PiSettings {
   prompts?: string[];
   themes?: string[];
   enableSkillCommands?: boolean;
+  hiddenModels?: string[];
   terminal?: Record<string, unknown>;
   images?: Record<string, unknown>;
   enabledModels?: string[];

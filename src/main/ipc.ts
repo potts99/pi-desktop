@@ -1,9 +1,10 @@
+import { exec } from "node:child_process";
 import { getDesktopConfig, updateDesktopConfig } from "./desktop-config.ts";
 import { getSettings, updateSettings } from "./settings-store.ts";
 
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import type { FSWatcher } from "node:fs";
-import { listWorkspaces, addWorkspace } from "./workspaces.ts";
+import { listWorkspaces, addWorkspace, removeWorkspace } from "./workspaces.ts";
 import { listSessions, listWorkspaceFiles, sessionDirFor, watchDir } from "./sessions.ts";
 import { getPinned, togglePin } from "./pinned.ts";
 import * as rt from "./session-runtime.ts";
@@ -26,6 +27,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   }
 
   ipcMain.handle("listWorkspaces", () => listWorkspaces());
+
+  ipcMain.handle("removeWorkspace", (_e, path: string) => removeWorkspace(path));
 
   ipcMain.handle("addWorkspace", async () => {
     const res = await dialog.showOpenDialog({ properties: ["openDirectory"] });
@@ -73,4 +76,35 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("minimizeWindow", () => { getWindow()?.minimize(); });
   ipcMain.handle("unmaximizeWindow", () => { getWindow()?.unmaximize(); });
   ipcMain.handle("isMaximized", () => getWindow()?.isMaximized() ?? false);
+  ipcMain.handle("isFullScreen", () => getWindow()?.isFullScreen() ?? false);
+
+  // ponytail: exec('code'), fallback to 'open -a "Visual Studio Code"' if code not on PATH
+  ipcMain.handle("openInVSCode", (_e, path: string) => {
+    return new Promise<void>((resolve, reject) => {
+      exec(`code "${path}"`, (err) => {
+        if (err) {
+          exec(`open -a "Visual Studio Code" "${path}"`, (err2) => {
+            if (err2) reject(new Error(err2.message));
+            else resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    });
+  });
+
+  ipcMain.handle("isVSCodeAvailable", () => {
+    return new Promise<boolean>((resolve) => {
+      exec("command -v code", (err) => {
+        if (!err) { resolve(true); return; }
+        // ponytail: check macOS app bundle as fallback
+        exec('test -d "/Applications/Visual Studio Code.app"', (err2) => {
+          resolve(!err2);
+        });
+      });
+    });
+  });
+
+  ipcMain.handle("getSharedModels", (_e, sessionKey?: string) => rt.getAllModelChoices(sessionKey));
 }

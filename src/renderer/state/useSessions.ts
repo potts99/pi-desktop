@@ -51,6 +51,7 @@ function freshTab(sessionKey: string, sessionPath: string | null): TabState {
     streamingText: "",
     streaming: false,
     models: [],
+    activeModel: null,
     thinkingLevel: "medium",
     mode: "normal",
     queue: emptyQueue,
@@ -144,6 +145,7 @@ export function useSessions() {
           mode: ev.state.mode ?? t.mode,
           streaming: ev.state.isStreaming ?? t.streaming,
           queue: ev.state.queue ?? t.queue,
+          activeModel: ev.state.model !== undefined ? (ev.state.model ?? null) : t.activeModel,
         }));
       } else if (ev.kind === "error") {
         patchTab(key, (t) => ({ ...t, streaming: false, streamingText: "", error: ev.message }));
@@ -192,6 +194,7 @@ export function useSessions() {
     tab.thinkingLevel = state.thinkingLevel;
     tab.mode = state.mode;
     tab.queue = state.queue;
+    tab.activeModel = state.model ?? null;
 
     setTabs((prev) => [...prev, tab]);
     setActiveIdx((prev) => (prev >= 0 ? prev : 0)); // stays on current, or lands on first
@@ -260,6 +263,17 @@ export function useSessions() {
     try {
       const applied = await window.pi.setMode(key, m);
       patchTab(key, (t) => ({ ...t, mode: applied }));
+    } catch (err) {
+      patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
+    }
+  }, []);
+
+  const setModel = useCallback(async (provider: string, id: string) => {
+    const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
+    if (!key || !window.pi) return;
+    try {
+      await window.pi.setModel(key, provider, id);
+      patchTab(key, (t) => ({ ...t, activeModel: { provider, id } }));
     } catch (err) {
       patchTab(key, (t) => ({ ...t, error: err instanceof Error ? err.message : String(err) }));
     }
@@ -343,6 +357,12 @@ export function useSessions() {
     await refreshWorkspaces();
   }, [refreshWorkspaces]);
 
+  const removeWorkspace = useCallback(async (path: string) => {
+    if (!window.pi) return;
+    await window.pi.removeWorkspace(path);
+    await refreshWorkspaces();
+  }, [refreshWorkspaces]);
+
   // Derived from active tab
   const tab = tabs[activeIdx];
   const activePath = tab?.sessionPath ?? null;
@@ -356,6 +376,8 @@ export function useSessions() {
   const retry = tab?.retry ?? { active: false };
   const stats: SessionStatsInfo | null = tab?.stats ?? null;
   const error = tab?.error ?? null;
+
+  const activeModel = tab?.activeModel ?? null;
 
   const activeTitle = activePath
     ? groups.flatMap((g) => g.sessions).find((s) => s.path === activePath)?.title ?? "Session"
@@ -372,6 +394,7 @@ export function useSessions() {
     activeKey,
     activePath,
     activeTitle,
+    activeModel,
     opening,
     messages,
     streamingText,
@@ -390,6 +413,7 @@ export function useSessions() {
     abort,
     setThinkingLevel,
     setMode,
+    setModel,
     cycleThinking,
     fork,
     clone,
@@ -397,6 +421,7 @@ export function useSessions() {
     remove,
     newAgent,
     addWorkspace,
+    removeWorkspace,
     closeTab,
     activateTab,
     nextTab,

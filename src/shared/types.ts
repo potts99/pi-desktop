@@ -19,7 +19,7 @@ export type Block =
   | { kind: "text"; text: string }
   | { kind: "thinking"; text: string }
   | { kind: "toolCall"; id: string; name: string; args: unknown }
-  | { kind: "toolResult"; toolCallId: string; toolName: string; text: string; isError: boolean };
+  | { kind: "toolResult"; toolCallId: string; toolName: string; text: string; isError: boolean; diff?: string };
 
 export interface TranscriptMessage {
   id?: string;
@@ -55,6 +55,7 @@ export interface SessionState {
   mode: AgentMode;
   isStreaming: boolean;
   queue: QueueState;
+  model?: { provider: string; id: string };
 }
 export interface SessionReplacement {
   cancelled: boolean;
@@ -84,6 +85,7 @@ export interface TabState {
   streamingText: string;
   streaming: boolean;
   models: ModelChoice[];
+  activeModel: ModelChoice | null;
   thinkingLevel: ThinkingLevel;
   mode: AgentMode;
   queue: QueueState;
@@ -106,6 +108,7 @@ export type SessionEvent =
 export interface Api {
   listWorkspaces(): Promise<string[]>;
   addWorkspace(): Promise<string[]>;                    // opens folder picker, returns new list
+  removeWorkspace(path: string): Promise<string[]>;     // removes workspace, returns new list
   listSessions(workspacePath: string): Promise<SessionRow[]>;
   listWorkspaceFiles(cwd: string, prefix: string): Promise<string[]>;
   openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }>;
@@ -113,6 +116,7 @@ export interface Api {
   sendPrompt(sessionKey: string, text: string, mode?: "prompt" | "steer" | "followUp"): Promise<void>;
   abortSession(sessionKey: string): Promise<void>;
   getModels(sessionKey: string): Promise<ModelChoice[]>;
+  getSharedModels(sessionKey?: string): Promise<ModelChoice[]>;
   setModel(sessionKey: string, provider: string, id: string): Promise<void>;
   getSessionState(sessionKey: string): Promise<SessionState>;
   setMode(sessionKey: string, mode: AgentMode): Promise<AgentMode>;
@@ -136,6 +140,9 @@ export interface Api {
   updateSettings(partial: Record<string, unknown>): Promise<Record<string, unknown>>;
   togglePin(sessionPath: string): Promise<string[]>;
   isMaximized(): Promise<boolean>;
+  isFullScreen(): Promise<boolean>;
+  openInVSCode(path: string): Promise<void>;
+  isVSCodeAvailable(): Promise<boolean>;
   onSessionEvent(cb: (sessionKey: string, ev: SessionEvent) => void): () => void;
   onSessionsChanged(cb: (workspacePath: string) => void): () => void;
 }
