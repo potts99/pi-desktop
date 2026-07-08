@@ -9,7 +9,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "pack": "npm run build && electron-builder --mac dir",
-    "deploy": "npm run pack && rm -rf /Applications/pi-desktop.app && cp -R release/mac-arm64/pi-desktop.app /Applications/ && echo 'Deployed to /Applications/pi-desktop.app'",
+    "deploy": "npm run pack && osascript -e 'tell application \"pi-desktop\" to quit' 2>/dev/null; sleep 1 && rm -rf /Applications/pi-desktop.app && cp -R release/mac-arm64/pi-desktop.app /Applications/ && echo 'Deployed to /Applications/pi-desktop.app'",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json"
   },

@@ -236,6 +236,9 @@ button {
 .nav-item:hover {
 	background: var(--cursor-bg-hover);
 }
+.nav-item.nav-active {
+	background: var(--cursor-bg-active);
+}
 .nav-icon {
 	color: var(--cursor-icon-secondary);
 	width: 16px;
@@ -1330,16 +1333,21 @@ button {
 	background: var(--cursor-bg);
 	padding: 10px 12px 8px;
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
 }
 .composer:focus-within {
 	border-color: #c4c4c0;
 }
 .composer-textarea-wrap {
 	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
 }
 .composer textarea {
 	width: 100%;
-	min-height: 24px;
+	min-height: 20px;
 	max-height: 240px;
 	resize: none;
 	border: none;
@@ -1350,6 +1358,7 @@ button {
 	font: inherit;
 	font-size: 13.5px;
 	line-height: 1.5;
+	transition: height 0.12s ease-out;
 }
 
 /* ── Composer popups (slash commands + @mentions) ── */
@@ -1405,8 +1414,7 @@ button {
 .composer-row {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	margin-top: 8px;
+	flex: none;
 }
 
 .composer-controls,
@@ -1416,12 +1424,16 @@ button {
 	gap: 6px;
 	min-width: 0;
 }
+.composer-controls {
+	max-width: 760px;
+	margin: 8px auto 0;
+}
 .mode-picker,
 .model-picker,
 .thinking-picker,
 .delivery-picker,
 .context-picker {
-	border: 1px solid var(--cursor-stroke-primary);
+	border: none;
 	background: var(--cursor-bg);
 	color: var(--cursor-text-secondary);
 	border-radius: var(--radius-sm);
@@ -1446,12 +1458,12 @@ button {
 	color: var(--cursor-text-on-accent);
 	border: none;
 	border-radius: var(--radius-sm);
-	width: 30px;
-	height: 30px;
+	width: 20px;
+	height: 20px;
 	display: grid;
 	place-items: center;
 	padding: 0;
-	font-size: 16px;
+	font-size: 10px;
 	line-height: 1;
 	font-weight: 600;
 	cursor: pointer;

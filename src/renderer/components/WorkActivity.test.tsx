@@ -86,6 +86,29 @@ describe("deriveWorkActivityItems", () => {
 	});
 });
 
+describe("WorkActivity status items", () => {
+	it("hides pi-lens setStatus rows", () => {
+		const { container } = render(
+			<WorkActivity
+				messages={[]}
+				active={true}
+				uiRequests={[
+					{
+						id: "s1",
+						method: "setStatus",
+						statusKey: "pi-lens-lsp",
+						statusText: "LSP Active: typescript",
+					},
+				]}
+				onRespond={vi.fn()}
+			/>,
+		);
+
+		expect(container.textContent).not.toContain("pi-lens-lsp");
+		expect(container.textContent).not.toContain("LSP Active");
+	});
+});
+
 describe("WorkActivity questions", () => {
 	it("submits select answers", () => {
 		const onRespond = vi.fn().mockResolvedValue(undefined);

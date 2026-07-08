@@ -287,6 +287,7 @@ export default function App() {
 								)
 							}
 							onNewAgent={s.newAgent}
+							isNewThread={s.newThread}
 							onAddWorkspace={s.addWorkspace}
 							onRemoveWorkspace={s.removeWorkspace}
 							onOpen={(path) => s.openSession({ path })}

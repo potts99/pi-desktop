@@ -531,46 +531,6 @@ export function InputBar({
 					)}
 				</div>
 				<div className="composer-row">
-					<div className="composer-controls">
-						<select
-							className="model-picker"
-							disabled={disabled || models.length === 0}
-							value={activeModel ? modelKey(activeModel) : ""}
-							onChange={(event) => {
-								const model = modelFromKey(event.target.value);
-								if (model) onModel(model.provider, model.id);
-							}}
-						>
-							{!activeModel && <option value="">Select model</option>}
-							{activeModel &&
-								!models.some(
-									(model) => modelKey(model) === modelKey(activeModel),
-								) && (
-									<option value={modelKey(activeModel)}>
-										{modelKey(activeModel)}
-									</option>
-								)}
-							{models.map((model) => (
-								<option key={modelKey(model)} value={modelKey(model)}>
-									{modelKey(model)}
-								</option>
-							))}
-						</select>
-						<select
-							className="thinking-picker"
-							disabled={disabled}
-							value={thinkingLevel}
-							onChange={(e) => onThinking(e.target.value as ThinkingLevel)}
-							onDoubleClick={onCycleThinking}
-						>
-							{thinkingLevels.map((level) => (
-								<option key={level} value={level}>
-									{level}
-								</option>
-							))}
-						</select>
-					</div>
-
 					<button
 						className={`send-btn${showStop ? " stop-btn" : ""}`}
 						disabled={showStop ? disabled : !canSubmit}
@@ -585,6 +545,45 @@ export function InputBar({
 						{showStop ? "■" : "↑"}
 					</button>
 				</div>
+			</div>
+			<div className="composer-controls">
+				<select
+					className="model-picker"
+					disabled={disabled || models.length === 0}
+					value={activeModel ? modelKey(activeModel) : ""}
+					onChange={(event) => {
+						const model = modelFromKey(event.target.value);
+						if (model) onModel(model.provider, model.id);
+					}}
+				>
+					{!activeModel && <option value="">Select model</option>}
+					{activeModel &&
+						!models.some(
+							(model) => modelKey(model) === modelKey(activeModel),
+						) && (
+							<option value={modelKey(activeModel)}>
+								{modelKey(activeModel)}
+							</option>
+						)}
+					{models.map((model) => (
+						<option key={modelKey(model)} value={modelKey(model)}>
+							{modelKey(model)}
+						</option>
+					))}
+				</select>
+				<select
+					className="thinking-picker"
+					disabled={disabled}
+					value={thinkingLevel}
+					onChange={(e) => onThinking(e.target.value as ThinkingLevel)}
+					onDoubleClick={onCycleThinking}
+				>
+					{thinkingLevels.map((level) => (
+						<option key={level} value={level}>
+							{level}
+						</option>
+					))}
+				</select>
 			</div>
 		</div>
 	);

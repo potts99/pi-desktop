@@ -87,6 +87,7 @@ export function Sidebar({
 	pinnedPaths,
 	streamingPaths,
 	onNewAgent,
+	isNewThread,
 	onAddWorkspace,
 	onRemoveWorkspace,
 	onOpen,
@@ -100,6 +101,7 @@ export function Sidebar({
 	pinnedPaths: string[];
 	streamingPaths: Set<string>;
 	onNewAgent: () => void;
+	isNewThread?: boolean;
 	onAddWorkspace: () => void;
 	onRemoveWorkspace: (path: string) => void;
 	onOpen: (path: string) => void;
@@ -134,7 +136,10 @@ export function Sidebar({
 	return (
 		<div className="sidebar">
 			<div className="sidebar-top">
-				<button className="nav-item nav-primary" onClick={onNewAgent}>
+				<button
+					className={`nav-item nav-primary${isNewThread ? " nav-active" : ""}`}
+					onClick={onNewAgent}
+				>
 					<span className="nav-icon">
 						<Plus size={16} />
 					</span>

@@ -83,11 +83,14 @@ export function deriveWorkActivityItems(
 			const todos = extractTodoLabels(call.args, result?.text);
 			if (todos.length > 0) {
 				items.push(
-					...todos.map((label, index) => ({
-						id: `${id}:${index}`,
-						label,
-						status: result ? (result.isError ? "error" : "done") : "active",
-					}) satisfies WorkActivityItem),
+					...todos.map(
+						(label, index) =>
+							({
+								id: `${id}:${index}`,
+								label,
+								status: result ? (result.isError ? "error" : "done") : "active",
+							}) satisfies WorkActivityItem,
+					),
 				);
 				continue;
 			}
@@ -98,7 +101,13 @@ export function deriveWorkActivityItems(
 			id,
 			label,
 			detail: result?.text ? firstLine(result.text) : undefined,
-			status: result ? (result.isError ? "error" : "done") : active ? "waiting" : "active",
+			status: result
+				? result.isError
+					? "error"
+					: "done"
+				: active
+					? "waiting"
+					: "active",
 		});
 	}
 
@@ -116,7 +125,9 @@ export function deriveWorkActivityItems(
 }
 
 function isHiddenActivityItem(item: WorkActivityItem): boolean {
-	return HIDDEN_ACTIVITY_LABELS.some((pattern) => pattern.test(item.label.trim()));
+	return HIDDEN_ACTIVITY_LABELS.some((pattern) =>
+		pattern.test(item.label.trim()),
+	);
 }
 
 export function WorkActivity({
@@ -143,12 +154,16 @@ export function WorkActivity({
 	const visibleRequests = uiRequests.filter(
 		(request) => !answered[request.id] && renderableRequest(request),
 	);
-	const answeredItems: WorkActivityItem[] = Object.entries(answered).map(([id, label]) => ({
-		id: `answered:${id}`,
-		label: `Answered · ${label}`,
-		status: "done" as const,
-	}));
-	const statusItems = uiRequests.flatMap(requestToActivityItem);
+	const answeredItems: WorkActivityItem[] = Object.entries(answered).map(
+		([id, label]) => ({
+			id: `answered:${id}`,
+			label: `Answered · ${label}`,
+			status: "done" as const,
+		}),
+	);
+	const statusItems = uiRequests
+		.flatMap(requestToActivityItem)
+		.filter((item) => !isHiddenActivityItem(item));
 	const items = [...activityItems, ...statusItems, ...answeredItems];
 	const live = active || visibleRequests.length > 0;
 
@@ -183,7 +198,11 @@ export function WorkActivity({
 		);
 	}
 
-	async function submit(request: SessionUiRequest, response: SessionUiResponse, label: string) {
+	async function submit(
+		request: SessionUiRequest,
+		response: SessionUiResponse,
+		label: string,
+	) {
 		setAnswered((prev) => ({ ...prev, [request.id]: label }));
 		await onRespond(response);
 	}
@@ -211,7 +230,11 @@ export function WorkActivity({
 								<button
 									key={option}
 									onClick={() =>
-										void submit(request, { id: request.id, value: option }, option)
+										void submit(
+											request,
+											{ id: request.id, value: option },
+											option,
+										)
 									}
 								>
 									{option}
@@ -314,7 +337,9 @@ export function WorkActivity({
 	);
 }
 
-function currentTurnMessages(messages: TranscriptMessage[]): TranscriptMessage[] {
+function currentTurnMessages(
+	messages: TranscriptMessage[],
+): TranscriptMessage[] {
 	let start = 0;
 	for (let i = messages.length - 1; i >= 0; i--) {
 		if (messages[i].role === "user") {
@@ -350,7 +375,15 @@ function labelsFromValue(value: unknown): string[] {
 		const labels = labelsFromValue(record[key]);
 		if (labels.length > 0) return labels;
 	}
-	for (const key of ["text", "title", "task", "content", "label", "question", "prompt"]) {
+	for (const key of [
+		"text",
+		"title",
+		"task",
+		"content",
+		"label",
+		"question",
+		"prompt",
+	]) {
 		if (typeof record[key] === "string" && record[key]) return [record[key]];
 	}
 	return [];
@@ -363,7 +396,9 @@ function questionLabel(toolName: string, args: unknown): string {
 
 function requestTitle(request: SessionUiRequest): string {
 	if (request.method === "confirm")
-		return request.message ? `${request.title}: ${request.message}` : request.title;
+		return request.message
+			? `${request.title}: ${request.message}`
+			: request.title;
 	if (request.method === "notify") return request.message;
 	if (request.method === "setWidget") return request.widgetKey;
 	if (request.method === "setStatus") return request.statusKey;
@@ -385,7 +420,10 @@ function requestToActivityItem(request: SessionUiRequest): WorkActivityItem[] {
 		{
 			id: request.id,
 			label: requestTitle(request),
-			status: request.method === "notify" && request.notifyType === "error" ? "error" : "done",
+			status:
+				request.method === "notify" && request.notifyType === "error"
+					? "error"
+					: "done",
 			detail:
 				request.method === "setStatus"
 					? request.statusText
@@ -401,7 +439,12 @@ function renderableRequest(request: SessionUiRequest): boolean {
 }
 
 function firstLine(text: string): string {
-	return text.split("\n").find((line) => line.trim())?.trim() ?? "";
+	return (
+		text
+			.split("\n")
+			.find((line) => line.trim())
+			?.trim() ?? ""
+	);
 }
 
 function StatusIcon({ status }: { status: WorkActivityItem["status"] }) {
