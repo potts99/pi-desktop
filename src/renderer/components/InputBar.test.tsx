@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { InputBar } from "./InputBar.tsx";
 
@@ -15,6 +15,14 @@ const baseProps = {
 	onThinking: vi.fn(),
 	onCycleThinking: vi.fn(),
 };
+
+function installPi(
+	commands: Array<{ id: string; label: string; description: string }>,
+) {
+	const pi = { listSlashCommands: vi.fn(async () => commands) };
+	Object.assign(window, { pi });
+	return pi;
+}
 
 describe("InputBar model picker", () => {
 	it("selects models by stable provider/id keys", () => {
@@ -52,6 +60,50 @@ describe("InputBar model picker", () => {
 		expect(
 			container.querySelector<HTMLSelectElement>(".model-picker")?.value,
 		).toBe("");
+	});
+});
+
+describe("InputBar slash commands", () => {
+	it("shows loaded skill and prompt commands after typing slash", async () => {
+		const pi = installPi([
+			{ id: "prompt:review", label: "/review", description: "Prompt · Review" },
+			{ id: "skill:test", label: "/skill:test", description: "Skill · Test" },
+		]);
+		const { container } = render(
+			<InputBar
+				{...baseProps}
+				models={[]}
+				activeModel={null}
+				onModel={vi.fn()}
+			/>,
+		);
+		const textarea = container.querySelector("textarea")!;
+
+		await waitFor(() => expect(pi.listSlashCommands).toHaveBeenCalled());
+		fireEvent.change(textarea, { target: { value: "/", selectionStart: 1 } });
+
+		expect(await screen.findByText("/review")).toBeTruthy();
+		expect(screen.getByText("/skill:test")).toBeTruthy();
+	});
+
+	it("shows an empty-state row instead of silently hiding the popup", async () => {
+		const pi = installPi([]);
+		const { container } = render(
+			<InputBar
+				{...baseProps}
+				models={[]}
+				activeModel={null}
+				onModel={vi.fn()}
+			/>,
+		);
+		const textarea = container.querySelector("textarea")!;
+
+		await waitFor(() => expect(pi.listSlashCommands).toHaveBeenCalled());
+		fireEvent.change(textarea, { target: { value: "/", selectionStart: 1 } });
+
+		expect(
+			await screen.findByText("No skill or prompt commands found"),
+		).toBeTruthy();
 	});
 });
 

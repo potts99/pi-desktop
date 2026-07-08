@@ -25,7 +25,10 @@ export function MessageBlocks({
 		return (
 			<div className="msg-wrap">
 				<div className={`msg msg-advisor msg-advisor-${advisory.severity}`}>
-					<div className="advisor-label">Advisor · {advisory.severity}</div>
+					<div className="advisor-label">
+						Advisor · {advisory.severity}
+						{advisory.model ? ` · ${advisory.model}` : ""}
+					</div>
 					<div className="advisor-body">
 						<Markdown remarkPlugins={[remarkGfm]}>{advisory.body}</Markdown>
 					</div>

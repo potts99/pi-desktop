@@ -12,7 +12,7 @@ import type { MetricsRunRecord } from "../shared/types.ts";
 
 function record(over: Partial<MetricsRunRecord>): MetricsRunRecord {
 	const has = (key: keyof MetricsRunRecord) =>
-		Object.prototype.hasOwnProperty.call(over, key);
+		Object.hasOwn(over, key);
 	return {
 		id: over.id ?? Math.random().toString(36),
 		source: over.source ?? "observed",
@@ -82,6 +82,9 @@ describe("metrics aggregation", () => {
 		expect(summary.modelRows[0].modelKey).toBe("openai/gpt-5");
 		expect(summary.advisorRows[0].severityCounts.concern).toBe(1);
 		expect(summary.heatmapCells.some((cell) => cell.day === "2026-07-01")).toBe(true);
+		// week-aligned: the grid starts on the Sunday before the first activity day
+		expect(summary.heatmapCells[0].day).toBe("2026-06-28");
+		expect(new Date(summary.heatmapCells[0].day).getDay()).toBe(0);
 	});
 
 	it("filters by date, project, model, and actor", () => {

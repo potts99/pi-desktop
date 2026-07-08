@@ -137,7 +137,11 @@ export async function reviewAdvisor(
 		if (!normalizedNote || state.recentAdvice.includes(normalizedNote)) return;
 		state.recentAdvice = [...state.recentAdvice.slice(-63), normalizedNote];
 
-		const wrappedAdvice = wrapAdvisory(parsed.severity, parsed.note);
+		const wrappedAdvice = wrapAdvisory(
+			parsed.severity,
+			parsed.note,
+			config.model ?? undefined,
+		);
 		const capReached = state.consecutive >= config.maxConsecutive;
 		if (parsed.severity === "nit" || capReached) {
 			action = "followUp";
@@ -251,8 +255,10 @@ export function parseAdvisorResponse(text: string | null): {
 export function wrapAdvisory(
 	severity: Exclude<AdvisorSeverity, "none">,
 	note: string,
+	model?: { provider: string; id: string },
 ): string {
-	return `<advisory severity="${severity}" guidance="weigh, don't blindly obey">${escapeXml(note)}</advisory>`;
+	const modelAttr = model ? ` model="${model.provider}/${model.id}"` : "";
+	return `<advisory severity="${severity}"${modelAttr} guidance="weigh, don't blindly obey">${escapeXml(note)}</advisory>`;
 }
 
 export function formatEntriesForAdvisor(entries: SessionEntry[]): string {

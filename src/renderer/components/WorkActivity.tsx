@@ -22,6 +22,7 @@ export const ACTIVITY_TOOL_NAMES = [
 ];
 
 const BLOCKING_METHODS = new Set(["select", "confirm", "input", "editor"]);
+const HIDDEN_ACTIVITY_LABELS = [/^pi-lens(?:\b|-)/i];
 
 export function hiddenActivityToolCallIds(
 	messages: TranscriptMessage[],
@@ -111,7 +112,11 @@ export function deriveWorkActivityItems(
 		});
 	}
 
-	return items;
+	return items.filter((item) => !isHiddenActivityItem(item));
+}
+
+function isHiddenActivityItem(item: WorkActivityItem): boolean {
+	return HIDDEN_ACTIVITY_LABELS.some((pattern) => pattern.test(item.label.trim()));
 }
 
 export function WorkActivity({

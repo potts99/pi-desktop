@@ -68,6 +68,12 @@ export interface QueueState {
 	followUp: string[];
 }
 
+export interface SlashCommand {
+	id: string;
+	label: string;
+	description: string;
+}
+
 export interface RetryState {
 	active: boolean;
 	attempt?: number;
@@ -343,6 +349,7 @@ export interface Api {
 	removeWorkspace(path: string): Promise<string[]>; // removes workspace, returns new list
 	listSessions(workspacePath: string): Promise<SessionRow[]>;
 	listWorkspaceFiles(cwd: string, prefix: string): Promise<string[]>;
+	listSlashCommands(cwd: string | null): Promise<SlashCommand[]>;
 	listGitBranches(cwd: string): Promise<GitBranchInfo>;
 	checkoutGitBranch(cwd: string, branch: string): Promise<void>;
 	openSession(

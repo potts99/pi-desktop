@@ -17,6 +17,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { getSettings } from "./settings-store.ts";
 import { getAdvisorConfig } from "./advisor-store.ts";
+import { expandSlashCommand } from "./slash-resources.ts";
 import {
 	createAdvisorState,
 	noteUserTurn,
@@ -828,7 +829,7 @@ export async function sendPrompt(
 		noteUserTurn(e.advisor);
 		startWork(sessionKey, e);
 		e.pendingMetricMode = "prompt";
-		return e.client.prompt(text);
+		return e.client.prompt(await expandSlashCommand(e.cwd, text));
 	});
 }
 
@@ -837,7 +838,7 @@ export async function steer(sessionKey: string, text: string): Promise<void> {
 		noteUserTurn(e.advisor);
 		startWork(sessionKey, e);
 		if (!e.activeMetricRun) e.pendingMetricMode = "steer";
-		return e.client.steer(text);
+		return e.client.steer(await expandSlashCommand(e.cwd, text));
 	});
 }
 
@@ -849,7 +850,7 @@ export async function followUp(
 		noteUserTurn(e.advisor);
 		startWork(sessionKey, e);
 		e.pendingMetricMode = "followUp";
-		return e.client.followUp(text);
+		return e.client.followUp(await expandSlashCommand(e.cwd, text));
 	});
 }
 

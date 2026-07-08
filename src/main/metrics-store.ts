@@ -35,7 +35,12 @@ interface RawSessionEntry {
 		role?: string;
 		model?: unknown;
 		usage?: PartialTokens & {
-			cost?: Partial<Record<"input" | "output" | "cacheRead" | "cacheWrite" | "total", number>>;
+			cost?: Partial<
+				Record<
+					"input" | "output" | "cacheRead" | "cacheWrite" | "total",
+					number
+				>
+			>;
 		};
 		content?: unknown;
 	};
@@ -114,7 +119,10 @@ function finite(value: unknown): number {
 	return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function addTokens(a: MetricsTokenUsage, b: MetricsTokenUsage): MetricsTokenUsage {
+function addTokens(
+	a: MetricsTokenUsage,
+	b: MetricsTokenUsage,
+): MetricsTokenUsage {
 	return {
 		input: a.input + b.input,
 		output: a.output + b.output,
@@ -125,7 +133,10 @@ function addTokens(a: MetricsTokenUsage, b: MetricsTokenUsage): MetricsTokenUsag
 	};
 }
 
-function subtractStats(after: MetricStatsLike, before: MetricStatsLike): {
+function subtractStats(
+	after: MetricStatsLike,
+	before: MetricStatsLike,
+): {
 	tokens: MetricsTokenUsage;
 	cost: number;
 	toolCalls: number;
@@ -144,7 +155,10 @@ function subtractStats(after: MetricStatsLike, before: MetricStatsLike): {
 		},
 		cost: Math.max(0, finite(after.cost) - finite(before.cost)),
 		toolCalls: Math.max(0, finite(after.toolCalls) - finite(before.toolCalls)),
-		toolResults: Math.max(0, finite(after.toolResults) - finite(before.toolResults)),
+		toolResults: Math.max(
+			0,
+			finite(after.toolResults) - finite(before.toolResults),
+		),
 	};
 }
 
@@ -162,10 +176,16 @@ function dayOf(iso: string): string {
 function modelParts(modelKey: string): { provider?: string; modelId?: string } {
 	const slash = modelKey.indexOf("/");
 	if (slash <= 0) return { modelId: modelKey || undefined };
-	return { provider: modelKey.slice(0, slash), modelId: modelKey.slice(slash + 1) };
+	return {
+		provider: modelKey.slice(0, slash),
+		modelId: modelKey.slice(slash + 1),
+	};
 }
 
-function modelKeyOf(model?: { provider: string; id: string } | null, fallback = "unknown"): string {
+function modelKeyOf(
+	model?: { provider: string; id: string } | null,
+	fallback = "unknown",
+): string {
 	return model ? `${model.provider}/${model.id}` : fallback;
 }
 
@@ -174,7 +194,9 @@ export function workerMetricRecord(input: WorkerMetricInput): MetricsRunRecord {
 	const durationMs = Math.max(0, input.endedAtMs - input.startedAtMs);
 	const delta = subtractStats(input.after, input.before);
 	const modelKey = input.modelKey ?? modelKeyOf(input.model);
-	const parts = input.model ? { provider: input.model.provider, modelId: input.model.id } : modelParts(modelKey);
+	const parts = input.model
+		? { provider: input.model.provider, modelId: input.model.id }
+		: modelParts(modelKey);
 	const tps =
 		durationMs > 0 && delta.tokens.output > 0
 			? delta.tokens.output / (durationMs / 1000)
@@ -205,15 +227,20 @@ export function workerMetricRecord(input: WorkerMetricInput): MetricsRunRecord {
 	};
 }
 
-export function advisorMetricRecord(input: AdvisorMetricInput): MetricsRunRecord {
+export function advisorMetricRecord(
+	input: AdvisorMetricInput,
+): MetricsRunRecord {
 	const before = input.before ?? {};
 	const after = input.after ?? {};
-	const delta = input.after && input.before ? subtractStats(after, before) : {
-		tokens: zeroTokens(),
-		cost: 0,
-		toolCalls: 0,
-		toolResults: 0,
-	};
+	const delta =
+		input.after && input.before
+			? subtractStats(after, before)
+			: {
+					tokens: zeroTokens(),
+					cost: 0,
+					toolCalls: 0,
+					toolResults: 0,
+				};
 	const endedAt = iso(input.endedAtMs);
 	const durationMs = Math.max(0, input.endedAtMs - input.startedAtMs);
 	return {
@@ -242,7 +269,9 @@ export function advisorMetricRecord(input: AdvisorMetricInput): MetricsRunRecord
 	};
 }
 
-export async function appendMetricRecord(record: MetricsRunRecord): Promise<void> {
+export async function appendMetricRecord(
+	record: MetricsRunRecord,
+): Promise<void> {
 	// ponytail: bare appendFile; concurrent session finishes could interleave lines.
 	// Add a single-writer queue if the log ever shows torn entries.
 	await mkdir(dirname(metricsPath), { recursive: true });
@@ -257,7 +286,8 @@ async function readRawRecords(): Promise<MetricsRunRecord[]> {
 			if (!line.trim()) continue;
 			try {
 				const parsed = JSON.parse(line) as MetricsRunRecord;
-				if (typeof parsed.id === "string" && parsed.id) records.push(normalizeRecord(parsed));
+				if (typeof parsed.id === "string" && parsed.id)
+					records.push(normalizeRecord(parsed));
 			} catch {
 				/* skip malformed metric lines */
 			}
@@ -275,7 +305,8 @@ export async function readMetricRecords(): Promise<MetricsRunRecord[]> {
 }
 
 function normalizeRecord(record: MetricsRunRecord): MetricsRunRecord {
-	const endedAt = record.endedAt || record.startedAt || new Date().toISOString();
+	const endedAt =
+		record.endedAt || record.startedAt || new Date().toISOString();
 	return {
 		...record,
 		source: record.source === "backfill" ? "backfill" : "observed",
@@ -295,11 +326,15 @@ function normalizeRecord(record: MetricsRunRecord): MetricsRunRecord {
 	};
 }
 
-export async function getMetricsSummary(filter: MetricsFilter = {}): Promise<MetricsSummary> {
+export async function getMetricsSummary(
+	filter: MetricsFilter = {},
+): Promise<MetricsSummary> {
 	return summarizeMetrics(await readMetricRecords(), filter);
 }
 
-export async function refreshMetricsBackfill(filter: MetricsFilter = {}): Promise<MetricsSummary> {
+export async function refreshMetricsBackfill(
+	filter: MetricsFilter = {},
+): Promise<MetricsSummary> {
 	const stored = await readMetricRecords();
 	const existing = new Set(stored.map((record) => record.id));
 	// Sessions already covered by observed records are skipped so live + backfill
@@ -314,7 +349,8 @@ export async function refreshMetricsBackfill(filter: MetricsFilter = {}): Promis
 	for (const file of sessionFiles) {
 		const records = await parseSessionFile(file);
 		for (const record of records) {
-			if (record.sessionId && observedSessionIds.has(record.sessionId)) continue;
+			if (record.sessionId && observedSessionIds.has(record.sessionId))
+				continue;
 			if (existing.has(record.id)) continue;
 			existing.add(record.id);
 			additions.push(record);
@@ -355,7 +391,8 @@ async function findSessionFiles(root: string): Promise<string[]> {
 			entries.map(async (entry) => {
 				const path = join(dir, entry.name);
 				if (entry.isDirectory()) await visit(path);
-				else if (entry.isFile() && entry.name.endsWith(".jsonl")) found.push(path);
+				else if (entry.isFile() && entry.name.endsWith(".jsonl"))
+					found.push(path);
 			}),
 		);
 	}
@@ -363,7 +400,9 @@ async function findSessionFiles(root: string): Promise<string[]> {
 	return found.sort();
 }
 
-export async function parseSessionFile(sessionPath: string): Promise<MetricsRunRecord[]> {
+export async function parseSessionFile(
+	sessionPath: string,
+): Promise<MetricsRunRecord[]> {
 	let text: string;
 	try {
 		text = await readFile(sessionPath, "utf-8");
@@ -385,12 +424,15 @@ export async function parseSessionFile(sessionPath: string): Promise<MetricsRunR
 			continue;
 		}
 		if (entry.type === "session") {
-			projectPath = typeof entry.cwd === "string" && entry.cwd ? entry.cwd : projectPath;
-			sessionId = typeof entry.id === "string" && entry.id ? entry.id : sessionId;
+			projectPath =
+				typeof entry.cwd === "string" && entry.cwd ? entry.cwd : projectPath;
+			sessionId =
+				typeof entry.id === "string" && entry.id ? entry.id : sessionId;
 			continue;
 		}
 		if (entry.type === "model_change") {
-			if (entry.provider && entry.modelId) modelKey = `${entry.provider}/${entry.modelId}`;
+			if (entry.provider && entry.modelId)
+				modelKey = `${entry.provider}/${entry.modelId}`;
 			continue;
 		}
 		if (entry.type === "thinking_level_change") {
@@ -432,7 +474,11 @@ export async function parseSessionFile(sessionPath: string): Promise<MetricsRunR
 			cost: finite(entry.message.usage.cost?.total),
 			toolCalls: Array.isArray(entry.message.content)
 				? entry.message.content.filter((item) => {
-						return !!item && typeof item === "object" && (item as { type?: string }).type === "toolCall";
+						return (
+							!!item &&
+							typeof item === "object" &&
+							(item as { type?: string }).type === "toolCall"
+						);
 					}).length
 				: 0,
 			toolResults: 0,
@@ -457,8 +503,12 @@ export function summarizeMetrics(
 	allRecords: MetricsRunRecord[],
 	filter: MetricsFilter = {},
 ): MetricsSummary {
-	const availableProjects = [...new Set(allRecords.map((record) => record.projectPath))].sort();
-	const availableModels = [...new Set(allRecords.map((record) => record.modelKey))].sort();
+	const availableProjects = [
+		...new Set(allRecords.map((record) => record.projectPath)),
+	].sort();
+	const availableModels = [
+		...new Set(allRecords.map((record) => record.modelKey)),
+	].sort();
 	const from = filter.from ? filter.from.slice(0, 10) : null;
 	const to = filter.to ? filter.to.slice(0, 10) : null;
 	const records = allRecords
@@ -466,7 +516,8 @@ export function summarizeMetrics(
 			const day = record.day || dayOf(record.endedAt);
 			if (from && day < from) return false;
 			if (to && day > to) return false;
-			if (filter.projectPath && record.projectPath !== filter.projectPath) return false;
+			if (filter.projectPath && record.projectPath !== filter.projectPath)
+				return false;
 			if (filter.modelKey && record.modelKey !== filter.modelKey) return false;
 			if (filter.actor && record.actor !== filter.actor) return false;
 			return true;
@@ -487,9 +538,22 @@ export function summarizeMetrics(
 	let tpsSeconds = 0;
 
 	const daily = new Map<string, MetricsDailyBucket>();
-	const projects = new Map<string, MetricsProjectRow & { modelTokens: Map<string, number>; tpsOutput: number; tpsSeconds: number }>();
-	const models = new Map<string, MetricsModelRow & { tpsOutput: number; tpsSeconds: number }>();
-	const advisors = new Map<string, MetricsAdvisorRow & { durationTotal: number; durationSamples: number }>();
+	const projects = new Map<
+		string,
+		MetricsProjectRow & {
+			modelTokens: Map<string, number>;
+			tpsOutput: number;
+			tpsSeconds: number;
+		}
+	>();
+	const models = new Map<
+		string,
+		MetricsModelRow & { tpsOutput: number; tpsSeconds: number }
+	>();
+	const advisors = new Map<
+		string,
+		MetricsAdvisorRow & { durationTotal: number; durationSamples: number }
+	>();
 
 	for (const record of records) {
 		totals.cost += record.cost;
@@ -520,7 +584,11 @@ export function summarizeMetrics(
 			record.modelKey,
 			(project.modelTokens.get(record.modelKey) ?? 0) + record.tokens.total,
 		);
-		if (record.durationMs && record.durationMs > 0 && record.tokens.output > 0) {
+		if (
+			record.durationMs &&
+			record.durationMs > 0 &&
+			record.tokens.output > 0
+		) {
 			project.tpsOutput += record.tokens.output;
 			project.tpsSeconds += record.durationMs / 1000;
 		}
@@ -530,7 +598,11 @@ export function summarizeMetrics(
 		model.cost += record.cost;
 		model.tokens = addTokens(model.tokens, record.tokens);
 		model.lastUsedAt = record.endedAt;
-		if (record.durationMs && record.durationMs > 0 && record.tokens.output > 0) {
+		if (
+			record.durationMs &&
+			record.durationMs > 0 &&
+			record.tokens.output > 0
+		) {
 			model.tpsOutput += record.tokens.output;
 			model.tpsSeconds += record.durationMs / 1000;
 		}
@@ -552,7 +624,10 @@ export function summarizeMetrics(
 		}
 	}
 
-	const maxDayTokens = Math.max(0, ...[...daily.values()].map((bucket) => bucket.tokens.total));
+	const maxDayTokens = Math.max(
+		0,
+		...[...daily.values()].map((bucket) => bucket.tokens.total),
+	);
 	const heatmapCells = heatmapRange(records, daily).map((day) => {
 		const bucket = daily.get(day);
 		return {
@@ -579,15 +654,20 @@ export function summarizeMetrics(
 			advisorReviews: totals.advisorReviews,
 			advisorInterventions: totals.advisorInterventions,
 		},
-		dailyBuckets: [...daily.values()].sort((a, b) => a.day.localeCompare(b.day)),
+		dailyBuckets: [...daily.values()].sort((a, b) =>
+			a.day.localeCompare(b.day),
+		),
 		heatmapCells,
 		projectRows: [...projects.values()]
-			.map(({ modelTokens, tpsOutput: output, tpsSeconds: seconds, ...row }) => ({
-				...row,
-				topModelKey:
-					[...modelTokens.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown",
-				averageTps: seconds > 0 ? output / seconds : null,
-			}))
+			.map(
+				({ modelTokens, tpsOutput: output, tpsSeconds: seconds, ...row }) => ({
+					...row,
+					topModelKey:
+						[...modelTokens.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
+						"unknown",
+					averageTps: seconds > 0 ? output / seconds : null,
+				}),
+			)
 			.sort((a, b) => b.tokens.total - a.tokens.total),
 		modelRows: [...models.values()]
 			.map(({ tpsOutput: output, tpsSeconds: seconds, ...row }) => ({
@@ -598,14 +678,18 @@ export function summarizeMetrics(
 		advisorRows: [...advisors.values()]
 			.map(({ durationTotal, durationSamples, ...row }) => ({
 				...row,
-				averageDurationMs: durationSamples > 0 ? durationTotal / durationSamples : null,
+				averageDurationMs:
+					durationSamples > 0 ? durationTotal / durationSamples : null,
 			}))
 			.sort((a, b) => b.reviews - a.reviews),
 		records,
 	};
 }
 
-function getDaily(map: Map<string, MetricsDailyBucket>, day: string): MetricsDailyBucket {
+function getDaily(
+	map: Map<string, MetricsDailyBucket>,
+	day: string,
+): MetricsDailyBucket {
 	let bucket = map.get(day);
 	if (!bucket) {
 		bucket = { day, runs: 0, cost: 0, tokens: zeroTokens(), averageTps: null };
@@ -615,14 +699,22 @@ function getDaily(map: Map<string, MetricsDailyBucket>, day: string): MetricsDai
 }
 
 function getProject(
-	map: Map<string, MetricsProjectRow & { modelTokens: Map<string, number>; tpsOutput: number; tpsSeconds: number }>,
+	map: Map<
+		string,
+		MetricsProjectRow & {
+			modelTokens: Map<string, number>;
+			tpsOutput: number;
+			tpsSeconds: number;
+		}
+	>,
 	projectPath: string,
 ) {
 	let row = map.get(projectPath);
 	if (!row) {
 		row = {
 			projectPath,
-			projectName: projectPath === "unknown" ? "unknown" : basename(projectPath),
+			projectName:
+				projectPath === "unknown" ? "unknown" : basename(projectPath),
 			runs: 0,
 			cost: 0,
 			tokens: zeroTokens(),
@@ -638,7 +730,10 @@ function getProject(
 	return row;
 }
 
-function getModel(map: Map<string, MetricsModelRow & { tpsOutput: number; tpsSeconds: number }>, modelKey: string) {
+function getModel(
+	map: Map<string, MetricsModelRow & { tpsOutput: number; tpsSeconds: number }>,
+	modelKey: string,
+) {
 	let row = map.get(modelKey);
 	if (!row) {
 		row = {
@@ -657,7 +752,10 @@ function getModel(map: Map<string, MetricsModelRow & { tpsOutput: number; tpsSec
 }
 
 function getAdvisor(
-	map: Map<string, MetricsAdvisorRow & { durationTotal: number; durationSamples: number }>,
+	map: Map<
+		string,
+		MetricsAdvisorRow & { durationTotal: number; durationSamples: number }
+	>,
 	modelKey: string,
 ) {
 	let row = map.get(modelKey);
@@ -679,15 +777,23 @@ function getAdvisor(
 	return row;
 }
 
-function heatmapRange(records: MetricsRunRecord[], daily: Map<string, MetricsDailyBucket>): string[] {
+function heatmapRange(
+	records: MetricsRunRecord[],
+	daily: Map<string, MetricsDailyBucket>,
+): string[] {
 	const existing = [...daily.keys()].sort();
 	const end = existing.at(-1) ?? dayOf(new Date().toISOString());
-	const start = existing[0] ?? dayOffset(end, -89);
+	// Week-aligned (Sunday-start) span, capped to the trailing 53 weeks so the
+	// grid renders as 7-row columns via grid-auto-flow: column.
+	const trailingSunday = dayOffset(end, -weekdayOf(end));
+	const weekFloor = dayOffset(trailingSunday, -(52 * 7));
+	const first = existing[0];
+	const start = !first || first < weekFloor
+		? weekFloor
+		: dayOffset(first, -weekdayOf(first));
 	const days: string[] = [];
-	let cursor = start;
-	while (cursor <= end && days.length < 370) {
+	for (let cursor = start; cursor <= end && days.length < 372; cursor = dayOffset(cursor, 1)) {
 		days.push(cursor);
-		cursor = dayOffset(cursor, 1);
 	}
 	if (records.length === 0 && days.length === 0) return [];
 	return days;
@@ -699,6 +805,11 @@ function dayOffset(day: string, amount: number): string {
 	return date.toISOString().slice(0, 10);
 }
 
+function weekdayOf(day: string): number {
+	const [year, month, date] = day.split("-").map(Number);
+	return new Date(year, month - 1, date).getDay();
+}
+
 function heatmapLevel(value: number, max: number): number {
 	if (value <= 0 || max <= 0) return 0;
 	if (value >= max) return 4;
@@ -708,7 +819,9 @@ function heatmapLevel(value: number, max: number): number {
 	return 1;
 }
 
-export function statsLike(stats: SessionStatsInfo | null | undefined): MetricStatsLike {
+export function statsLike(
+	stats: SessionStatsInfo | null | undefined,
+): MetricStatsLike {
 	return {
 		sessionId: stats?.sessionId,
 		tokens: stats?.tokens,

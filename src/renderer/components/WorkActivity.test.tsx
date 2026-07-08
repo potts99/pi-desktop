@@ -64,6 +64,26 @@ describe("deriveWorkActivityItems", () => {
 			},
 		]);
 	});
+
+	it("hides pi-lens activity rows", () => {
+		const messages: TranscriptMessage[] = [
+			{
+				role: "assistant",
+				blocks: [
+					{
+						kind: "toolCall",
+						id: "t1",
+						name: "todo",
+						args: { todos: [{ text: "ponytail" }, { text: "pi-lens-lsp" }] },
+					},
+				],
+			},
+		];
+
+		expect(deriveWorkActivityItems(messages, true)).toMatchObject([
+			{ label: "ponytail", status: "active" },
+		]);
+	});
 });
 
 describe("WorkActivity questions", () => {

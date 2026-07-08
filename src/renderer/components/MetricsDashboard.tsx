@@ -92,7 +92,8 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 				if (!cancelled) setSummary(next);
 			})
 			.catch((err) => {
-				if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+				if (!cancelled)
+					setError(err instanceof Error ? err.message : String(err));
 			})
 			.finally(() => {
 				if (!cancelled) setLoading(false);
@@ -101,7 +102,6 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 			cancelled = true;
 		};
 	}, [filterKey]);
-
 
 	async function refreshBackfill() {
 		setRefreshing(true);
@@ -148,7 +148,10 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 							type="date"
 							value={filter.from ?? ""}
 							onChange={(event) =>
-								setFilter((current) => ({ ...current, from: event.target.value || undefined }))
+								setFilter((current) => ({
+									...current,
+									from: event.target.value || undefined,
+								}))
 							}
 						/>
 					</label>
@@ -158,7 +161,10 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 							type="date"
 							value={filter.to ?? ""}
 							onChange={(event) =>
-								setFilter((current) => ({ ...current, to: event.target.value || undefined }))
+								setFilter((current) => ({
+									...current,
+									to: event.target.value || undefined,
+								}))
 							}
 						/>
 					</label>
@@ -207,7 +213,9 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 							onChange={(event) =>
 								setFilter((current) => ({
 									...current,
-									actor: (event.target.value || undefined) as MetricsActor | undefined,
+									actor: (event.target.value || undefined) as
+										| MetricsActor
+										| undefined,
 								}))
 							}
 						>
@@ -247,7 +255,9 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 				<section className="metrics-section">
 					<div className="metrics-section-head">
 						<h2>Activity</h2>
-						<span>{loading || refreshing ? "Loading" : `${records.length} records`}</span>
+						<span>
+							{loading || refreshing ? "Loading" : `${records.length} records`}
+						</span>
 					</div>
 					<div className="metrics-heatmap" aria-label="Token activity heatmap">
 						{(summary?.heatmapCells ?? []).map((cell) => (
@@ -281,7 +291,9 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 								{summary?.modelRows.slice(0, 10).map((row) => (
 									<tr key={row.modelKey}>
 										<td title={row.modelKey}>{row.modelKey}</td>
-										<td><TokenStack tokens={row.tokens} /></td>
+										<td>
+											<TokenStack tokens={row.tokens} />
+										</td>
 										<td>{row.runs}</td>
 										<td>{tps(row.averageTps)}</td>
 										<td>{money(row.cost)}</td>
@@ -312,7 +324,9 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 								{summary?.projectRows.slice(0, 10).map((row) => (
 									<tr key={row.projectPath}>
 										<td title={row.projectPath}>{row.projectName}</td>
-										<td><TokenStack tokens={row.tokens} /></td>
+										<td>
+											<TokenStack tokens={row.tokens} />
+										</td>
 										<td>{row.runs}</td>
 										<td title={row.topModelKey}>{row.topModelKey}</td>
 										<td>{money(row.cost)}</td>
@@ -349,12 +363,19 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 									<td>{row.interventions}</td>
 									<td>
 										<span className="metrics-severity">
-											{row.severityCounts.nit}n {row.severityCounts.concern}c {row.severityCounts.blocker}b
+											{row.severityCounts.nit}n {row.severityCounts.concern}c{" "}
+											{row.severityCounts.blocker}b
 										</span>
 									</td>
-									<td><TokenStack tokens={row.tokens} /></td>
+									<td>
+										<TokenStack tokens={row.tokens} />
+									</td>
 									<td>{money(row.cost)}</td>
-									<td>{row.averageDurationMs === null ? "--" : Math.round(row.averageDurationMs)}</td>
+									<td>
+										{row.averageDurationMs === null
+											? "--"
+											: Math.round(row.averageDurationMs)}
+									</td>
 								</tr>
 							))}
 						</tbody>

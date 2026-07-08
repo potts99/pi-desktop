@@ -2,35 +2,13 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import type {
 	ModelChoice,
 	QueueState,
+	SlashCommand,
 	ThinkingLevel,
 	WorkspaceGroup,
 } from "../../shared/types.ts";
 
 const maxTextareaHeight = 240;
 const emptyQueue: QueueState = { steering: [], followUp: [] };
-
-interface SlashCommand {
-	id: string;
-	label: string;
-	description: string;
-}
-
-const slashCommands: SlashCommand[] = [
-	{ id: "edit", label: "/edit", description: "Edit files in the workspace" },
-	{ id: "search", label: "/search", description: "Search across the codebase" },
-	{ id: "task", label: "/task", description: "Create a task for the agent" },
-	{ id: "plan", label: "/plan", description: "Create an implementation plan" },
-	{ id: "file", label: "/file", description: "Reference a file by path" },
-	{ id: "symbol", label: "/symbol", description: "Reference a symbol in code" },
-	{ id: "explain", label: "/explain", description: "Explain selected code" },
-	{ id: "fix", label: "/fix", description: "Fix issues in selected code" },
-	{
-		id: "test",
-		label: "/test",
-		description: "Generate tests for selected code",
-	},
-	{ id: "refactor", label: "/refactor", description: "Refactor selected code" },
-];
 
 function modelKey(model: ModelChoice): string {
 	return `${model.provider}/${model.id}`;
@@ -147,11 +125,41 @@ export function InputBar({
 		adjustTextareaHeight();
 	}, [text, adjustTextareaHeight]);
 
-	// Slash command state
+	const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+	const [slashLoading, setSlashLoading] = useState(false);
+	const [slashError, setSlashError] = useState<string | null>(null);
 	const [slashActive, setSlashActive] = useState(false);
 	const [slashFilter, setSlashFilter] = useState("");
 	const [slashIdx, setSlashIdx] = useState(0);
 	const [slashStart, setSlashStart] = useState(0);
+
+	useEffect(() => {
+		let cancelled = false;
+		const fetchSlashCommands = () => {
+			if (!window.pi) return;
+			setSlashLoading(true);
+			setSlashError(null);
+			window.pi
+				.listSlashCommands(cwd)
+				.then((commands) => {
+					if (!cancelled) setSlashCommands(commands);
+				})
+				.catch((error) => {
+					if (cancelled) return;
+					setSlashCommands([]);
+					setSlashError(error instanceof Error ? error.message : String(error));
+				})
+				.finally(() => {
+					if (!cancelled) setSlashLoading(false);
+				});
+		};
+		fetchSlashCommands();
+		window.addEventListener("focus", fetchSlashCommands);
+		return () => {
+			cancelled = true;
+			window.removeEventListener("focus", fetchSlashCommands);
+		};
+	}, [cwd]);
 
 	// @mention state
 	const [mentionActive, setMentionActive] = useState(false);
@@ -165,6 +173,9 @@ export function InputBar({
 	const filteredSlash = slashCommands.filter((c) =>
 		c.label.toLowerCase().includes(slashFilter.toLowerCase()),
 	);
+	const slashEmptyText = slashCommands.length
+		? "No matching slash commands"
+		: "No skill or prompt commands found";
 
 	const closeSlash = useCallback(() => {
 		setSlashActive(false);
@@ -463,19 +474,33 @@ export function InputBar({
 						onKeyDown={handleKeyDown}
 						onPaste={handlePaste}
 					/>
-					{slashActive && filteredSlash.length > 0 && (
+					{slashActive && (
 						<div className="popup slash-popup">
-							{filteredSlash.map((cmd, i) => (
-								<div
-									key={cmd.id}
-									className={`popup-item${i === slashIdx ? " popup-selected" : ""}`}
-									onMouseDown={(e) => e.preventDefault()}
-									onClick={() => applySlash(cmd)}
-								>
-									<span className="popup-label">{cmd.label}</span>
-									<span className="popup-desc">{cmd.description}</span>
+							{slashLoading ? (
+								<div className="popup-item">
+									<span className="popup-desc">Loading slash commands…</span>
 								</div>
-							))}
+							) : slashError ? (
+								<div className="popup-item">
+									<span className="popup-desc">Slash commands unavailable: {slashError}</span>
+								</div>
+							) : filteredSlash.length === 0 ? (
+								<div className="popup-item">
+									<span className="popup-desc">{slashEmptyText}</span>
+								</div>
+							) : (
+								filteredSlash.map((cmd, i) => (
+									<div
+										key={cmd.id}
+										className={`popup-item${i === slashIdx ? " popup-selected" : ""}`}
+										onMouseDown={(e) => e.preventDefault()}
+										onClick={() => applySlash(cmd)}
+									>
+										<span className="popup-label">{cmd.label}</span>
+										<span className="popup-desc">{cmd.description}</span>
+									</div>
+								))
+							)}
 						</div>
 					)}
 					{mentionActive && (
