@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BarChart3, RefreshCw, X } from "lucide-react";
 import type {
 	MetricsActor,
@@ -74,17 +74,6 @@ function StatTile({
 	);
 }
 
-function optionValues(summary: MetricsSummary | null, current: MetricsFilter) {
-	const projects = new Set(summary?.records.map((record) => record.projectPath) ?? []);
-	const models = new Set(summary?.records.map((record) => record.modelKey) ?? []);
-	if (current.projectPath) projects.add(current.projectPath);
-	if (current.modelKey) models.add(current.modelKey);
-	return {
-		projects: [...projects].sort(),
-		models: [...models].sort(),
-	};
-}
-
 export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 	const [filter, setFilter] = useState<MetricsFilter>({});
 	const [summary, setSummary] = useState<MetricsSummary | null>(null);
@@ -113,7 +102,6 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 		};
 	}, [filterKey]);
 
-	const options = useMemo(() => optionValues(summary, filter), [summary, filter]);
 
 	async function refreshBackfill() {
 		setRefreshing(true);
@@ -186,7 +174,7 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 							}
 						>
 							<option value="">All projects</option>
-							{options.projects.map((path) => (
+							{(summary?.availableProjects ?? []).map((path) => (
 								<option key={path} value={path}>
 									{projectLabel(path)}
 								</option>
@@ -205,7 +193,7 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 							}
 						>
 							<option value="">All models</option>
-							{options.models.map((model) => (
+							{(summary?.availableModels ?? []).map((model) => (
 								<option key={model} value={model}>
 									{model}
 								</option>
@@ -258,10 +246,10 @@ export function MetricsDashboard({ onClose }: { onClose: () => void }) {
 
 				<section className="metrics-section">
 					<div className="metrics-section-head">
-						<h2>Calendar</h2>
+						<h2>Activity</h2>
 						<span>{loading || refreshing ? "Loading" : `${records.length} records`}</span>
 					</div>
-					<div className="metrics-heatmap" aria-label="Token calendar heatmap">
+					<div className="metrics-heatmap" aria-label="Token activity heatmap">
 						{(summary?.heatmapCells ?? []).map((cell) => (
 							<div
 								key={cell.day}

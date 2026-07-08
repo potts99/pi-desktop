@@ -3,12 +3,10 @@ import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import type {
 	AgentMode,
-	MetricsActor,
 	MetricsAdvisorAction,
 	MetricsAdvisorSeverity,
 	MetricsDailyBucket,
 	MetricsFilter,
-	MetricsHeatmapCell,
 	MetricsAdvisorRow,
 	MetricsModelRow,
 	MetricsProjectRow,
@@ -154,8 +152,11 @@ function iso(ms: number): string {
 	return new Date(ms).toISOString();
 }
 
-function dayOf(value: string): string {
-	return value.slice(0, 10);
+function dayOf(iso: string): string {
+	const date = new Date(iso);
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function modelParts(modelKey: string): { provider?: string; modelId?: string } {
@@ -242,6 +243,8 @@ export function advisorMetricRecord(input: AdvisorMetricInput): MetricsRunRecord
 }
 
 export async function appendMetricRecord(record: MetricsRunRecord): Promise<void> {
+	// ponytail: bare appendFile; concurrent session finishes could interleave lines.
+	// Add a single-writer queue if the log ever shows torn entries.
 	await mkdir(dirname(metricsPath), { recursive: true });
 	await appendFile(metricsPath, `${JSON.stringify(record)}\n`, "utf-8");
 }
@@ -297,12 +300,21 @@ export async function getMetricsSummary(filter: MetricsFilter = {}): Promise<Met
 }
 
 export async function refreshMetricsBackfill(filter: MetricsFilter = {}): Promise<MetricsSummary> {
-	const existing = new Set((await readMetricRecords()).map((record) => record.id));
+	const stored = await readMetricRecords();
+	const existing = new Set(stored.map((record) => record.id));
+	// Sessions already covered by observed records are skipped so live + backfill
+	// don't double-count the same turns.
+	const observedSessionIds = new Set(
+		stored
+			.filter((record) => record.source === "observed" && record.sessionId)
+			.map((record) => record.sessionId as string),
+	);
 	const sessionFiles = await findSessionFiles(await sessionRoot());
 	const additions: MetricsRunRecord[] = [];
 	for (const file of sessionFiles) {
 		const records = await parseSessionFile(file);
 		for (const record of records) {
+			if (record.sessionId && observedSessionIds.has(record.sessionId)) continue;
 			if (existing.has(record.id)) continue;
 			existing.add(record.id);
 			additions.push(record);
@@ -445,13 +457,15 @@ export function summarizeMetrics(
 	allRecords: MetricsRunRecord[],
 	filter: MetricsFilter = {},
 ): MetricsSummary {
-	const from = filter.from ? `${filter.from.slice(0, 10)}T00:00:00.000Z` : null;
-	const to = filter.to ? `${filter.to.slice(0, 10)}T23:59:59.999Z` : null;
+	const availableProjects = [...new Set(allRecords.map((record) => record.projectPath))].sort();
+	const availableModels = [...new Set(allRecords.map((record) => record.modelKey))].sort();
+	const from = filter.from ? filter.from.slice(0, 10) : null;
+	const to = filter.to ? filter.to.slice(0, 10) : null;
 	const records = allRecords
-		.map(normalizeRecord)
 		.filter((record) => {
-			if (from && record.endedAt < from) return false;
-			if (to && record.endedAt > to) return false;
+			const day = record.day || dayOf(record.endedAt);
+			if (from && day < from) return false;
+			if (to && day > to) return false;
 			if (filter.projectPath && record.projectPath !== filter.projectPath) return false;
 			if (filter.modelKey && record.modelKey !== filter.modelKey) return false;
 			if (filter.actor && record.actor !== filter.actor) return false;
@@ -496,7 +510,6 @@ export function summarizeMetrics(
 		day.runs += 1;
 		day.cost += record.cost;
 		day.tokens = addTokens(day.tokens, record.tokens);
-		day.averageTps = null;
 
 		const project = getProject(projects, record.projectPath);
 		project.runs += 1;
@@ -541,18 +554,20 @@ export function summarizeMetrics(
 
 	const maxDayTokens = Math.max(0, ...[...daily.values()].map((bucket) => bucket.tokens.total));
 	const heatmapCells = heatmapRange(records, daily).map((day) => {
-		const bucket = daily.get(day) ?? getDaily(new Map(), day);
+		const bucket = daily.get(day);
 		return {
 			day,
-			level: heatmapLevel(bucket.tokens.total, maxDayTokens),
-			runs: bucket.runs,
-			cost: bucket.cost,
-			tokens: bucket.tokens,
+			level: heatmapLevel(bucket?.tokens.total ?? 0, maxDayTokens),
+			runs: bucket?.runs ?? 0,
+			cost: bucket?.cost ?? 0,
+			tokens: bucket?.tokens ?? zeroTokens(),
 		};
 	});
 
 	return {
 		filter,
+		availableProjects,
+		availableModels,
 		generatedAt: new Date().toISOString(),
 		totals: {
 			runs: totals.runs,

@@ -290,6 +290,8 @@ export interface MetricsHeatmapCell {
 
 export interface MetricsSummary {
 	filter: MetricsFilter;
+	availableProjects: string[];
+	availableModels: string[];
 	generatedAt: string;
 	totals: MetricsTotals;
 	dailyBuckets: MetricsDailyBucket[];

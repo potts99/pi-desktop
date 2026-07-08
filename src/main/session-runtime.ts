@@ -85,6 +85,7 @@ interface Entry {
 		sessionPath?: string;
 		sessionId?: string;
 	};
+	pendingMetricMode?: "prompt" | "steer" | "followUp";
 }
 const pool = new Map<string, Entry>();
 let counter = 0;
@@ -451,6 +452,7 @@ function wireEvents(sessionKey: string, entry: Entry): void {
 				}
 			).assistantMessageEvent;
 			if (d?.type === "text_delta" && d.delta) {
+				beginPendingMetricRun(sessionKey, entry);
 				entry.emit(sessionKey, { kind: "assistantDelta", text: d.delta });
 			} else if (d?.type === "error") {
 				entry.emit(sessionKey, {
@@ -462,6 +464,7 @@ function wireEvents(sessionKey: string, entry: Entry): void {
 			const raw = (ev as { message: AgentMessage }).message;
 			const m = toBlocks(raw);
 			if (m) {
+				beginPendingMetricRun(sessionKey, entry);
 				entry.emit(sessionKey, { kind: "message", message: m });
 				if (
 					raw.role === "assistant" &&
@@ -743,12 +746,23 @@ function startWork(sessionKey: string, entry: Entry): void {
 	});
 }
 
+/** Begin the pending metric run once its turn actually starts streaming, so
+ *  prompt/steer/followUp each line up with their own turn boundaries:
+ *  prompt and followUp own separate turns; steer folds into the active run. */
+function beginPendingMetricRun(sessionKey: string, entry: Entry): void {
+	if (entry.activeMetricRun || !entry.pendingMetricMode) return;
+	const requestMode = entry.pendingMetricMode;
+	entry.pendingMetricMode = undefined;
+	void beginWorkerMetricRun(sessionKey, entry, requestMode);
+}
+
 async function beginWorkerMetricRun(
 	sessionKey: string,
 	entry: Entry,
 	requestMode: "prompt" | "steer" | "followUp",
 ): Promise<void> {
-	const startedAtMs = entry.workingStartedAt ?? Date.now();
+	if (entry.activeMetricRun) return;
+	const startedAtMs = Date.now();
 	const [sessionState, stats] = await Promise.all([
 		entry.client.getState().catch(() => null),
 		entry.client.getSessionStats().catch(() => null),
@@ -770,7 +784,7 @@ async function beginWorkerMetricRun(
 }
 
 async function finishWorkerMetricRun(
-	sessionKey: string,
+	_sessionKey: string,
 	entry: Entry,
 	status: "completed" | "aborted" | "error",
 ): Promise<void> {
@@ -813,7 +827,7 @@ export async function sendPrompt(
 	await runCommand(sessionKey, async (e) => {
 		noteUserTurn(e.advisor);
 		startWork(sessionKey, e);
-		await beginWorkerMetricRun(sessionKey, e, "prompt");
+		e.pendingMetricMode = "prompt";
 		return e.client.prompt(text);
 	});
 }
@@ -822,7 +836,7 @@ export async function steer(sessionKey: string, text: string): Promise<void> {
 	await runCommand(sessionKey, async (e) => {
 		noteUserTurn(e.advisor);
 		startWork(sessionKey, e);
-		await beginWorkerMetricRun(sessionKey, e, "steer");
+		if (!e.activeMetricRun) e.pendingMetricMode = "steer";
 		return e.client.steer(text);
 	});
 }
@@ -834,13 +848,14 @@ export async function followUp(
 	await runCommand(sessionKey, async (e) => {
 		noteUserTurn(e.advisor);
 		startWork(sessionKey, e);
-		await beginWorkerMetricRun(sessionKey, e, "followUp");
+		e.pendingMetricMode = "followUp";
 		return e.client.followUp(text);
 	});
 }
 
 export async function abortSession(sessionKey: string): Promise<void> {
 	await runCommand(sessionKey, async (e) => {
+		e.pendingMetricMode = undefined;
 		await finishWorkerMetricRun(sessionKey, e, "aborted");
 		clearWork(e);
 		return e.client.abort();

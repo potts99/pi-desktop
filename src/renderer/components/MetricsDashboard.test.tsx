@@ -14,6 +14,8 @@ function summary(over: Partial<MetricsSummary> = {}): MetricsSummary {
 	};
 	return {
 		filter: {},
+		availableProjects: ["/repo/a"],
+		availableModels: ["openai/gpt-5"],
 		generatedAt: "2026-07-01T10:00:00.000Z",
 		totals: {
 			runs: 1,
