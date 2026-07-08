@@ -4,8 +4,9 @@ import { access, readFile, readdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { RpcClient, ModelRegistry, AuthStorage } from "@earendil-works/pi-coding-agent";
-import { getSessionArgs } from "./desktop-config.ts";
 import { getSettings } from "./settings-store.ts";
+import { getAdvisorConfig } from "./advisor-store.ts";
+import { createAdvisorState, noteUserTurn, resetAdvisor, reviewAdvisor, type AdvisorState } from "./advisor-runtime.ts";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
@@ -33,6 +34,7 @@ interface Entry {
   args: string[];
   sessionPath?: string;
   mode: AgentMode;
+  advisor: AdvisorState;
   emit: (sessionKey: string, ev: SessionEvent) => void;
 }
 const pool = new Map<string, Entry>();
@@ -129,6 +131,19 @@ function textOf(message: TranscriptMessage): string {
     .trim();
 }
 
+function errorMessageOf(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message;
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["errorMessage", "message", "finalError"]) {
+    const message = errorMessageOf(record[key]);
+    if (message) return message;
+  }
+  return errorMessageOf(record.error);
+}
+
 async function transcript(client: RpcClient): Promise<TranscriptMessage[]> {
   try {
     const { entries } = await client.getEntries();
@@ -172,16 +187,40 @@ async function hydrateForkIds(client: RpcClient, message: TranscriptMessage): Pr
   return match ? { ...message, id: match.entryId } : message;
 }
 
+async function reviewAfterTurn(sessionKey: string, entry: Entry): Promise<void> {
+  try {
+    await reviewAdvisor({
+      state: entry.advisor,
+      config: await getAdvisorConfig(),
+      worker: entry.client,
+      cwd: entry.cwd,
+      cliPath,
+      env: await agentEnv(),
+      createClient: (options) => new RpcClient(options),
+    });
+  } catch (error) {
+    entry.emit(sessionKey, { kind: "error", message: `Advisor failed: ${errorMessageOf(error) ?? String(error)}` });
+  }
+}
+
 function wireEvents(sessionKey: string, entry: Entry): void {
   entry.client.onEvent((ev: AgentEvent) => {
-    if (ev.type === "message_update") {
-      const d = (ev as { assistantMessageEvent?: { type?: string; delta?: string } }).assistantMessageEvent;
-      if (d?.type === "text_delta" && d.delta) entry.emit(sessionKey, { kind: "assistantDelta", text: d.delta });
-    } else if (ev.type === "message_end") {
+    const eventType = (ev as { type: string }).type;
+    if (eventType === "message_update") {
+      const d = (ev as { assistantMessageEvent?: { type?: string; delta?: string; error?: unknown } }).assistantMessageEvent;
+      if (d?.type === "text_delta" && d.delta) {
+        entry.emit(sessionKey, { kind: "assistantDelta", text: d.delta });
+      } else if (d?.type === "error") {
+        entry.emit(sessionKey, { kind: "error", message: errorMessageOf(d) ?? "Unknown agent error" });
+      }
+    } else if (eventType === "message_end") {
       const raw = (ev as { message: AgentMessage }).message;
       const m = toBlocks(raw);
       if (m) {
         entry.emit(sessionKey, { kind: "message", message: m });
+        if (raw.role === "assistant" && raw.stopReason === "error" && raw.errorMessage) {
+          entry.emit(sessionKey, { kind: "error", message: raw.errorMessage });
+        }
         if (m.role === "user") {
           void hydrateForkIds(entry.client, m)
             .then((hydrated) => {
@@ -190,18 +229,21 @@ function wireEvents(sessionKey: string, entry: Entry): void {
             .catch(() => {});
         }
       }
-    } else if (ev.type === "agent_end") {
+    } else if (eventType === "agent_end") {
       entry.emit(sessionKey, { kind: "idle" });
-    } else if (ev.type === "queue_update") {
+      void reviewAfterTurn(sessionKey, entry);
+    } else if (eventType === "queue_update") {
       const q = ev as { steering?: string[]; followUp?: string[] };
       entry.emit(sessionKey, { kind: "queue", queue: { steering: q.steering ?? [], followUp: q.followUp ?? [] } });
-    } else if (ev.type === "auto_retry_start") {
+    } else if (eventType === "auto_retry_start") {
       const r = ev as { attempt?: number; maxAttempts?: number; delayMs?: number; errorMessage?: string };
       entry.emit(sessionKey, {
         kind: "retry",
         retry: { active: true, attempt: r.attempt, maxAttempts: r.maxAttempts, delayMs: r.delayMs, message: r.errorMessage },
       });
-    } else if (ev.type === "auto_retry_end") {
+    } else if (eventType === "error") {
+      entry.emit(sessionKey, { kind: "error", message: errorMessageOf(ev) ?? "Unknown agent error" });
+    } else if (eventType === "auto_retry_end") {
       const r = ev as { success?: boolean; attempt?: number; finalError?: string };
       entry.emit(sessionKey, {
         kind: "retry",
@@ -259,20 +301,26 @@ async function state(entry: Entry): Promise<SessionState> {
 }
 
 export async function openSession(
-  arg: { path: string } | { newIn: string },
+  arg: { path: string; cwd?: string } | { newIn: string },
   emit: (sessionKey: string, ev: SessionEvent) => void,
 ): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }> {
-  const cwd = "path" in arg ? undefined : arg.newIn;
+  const cwd = "path" in arg ? arg.cwd : arg.newIn;
   const sessionArgs = "path" in arg ? ["--session", arg.path] : [];
   const isExisting = "path" in arg;
-  // ponytail: both reads are cached after first call; parallel in case of a cache miss
-  const [desktopArgs, env] = await Promise.all([getSessionArgs(), agentEnv()]);
-  const args = [...sessionArgs, ...desktopArgs];
-  const client = new RpcClient({ cliPath, cwd, args, env });
+  const env = await agentEnv();
+  const client = new RpcClient({ cliPath, cwd, args: sessionArgs, env });
   await client.start();
 
   const sessionKey = `s${++counter}`;
-  const entry: Entry = { client, cwd: cwd ?? "", args, sessionPath: isExisting ? arg.path : undefined, mode: defaultMode, emit };
+  const entry: Entry = {
+    client,
+    cwd: cwd ?? "",
+    args: sessionArgs,
+    sessionPath: isExisting ? arg.path : undefined,
+    mode: defaultMode,
+    advisor: createAdvisorState(),
+    emit,
+  };
   pool.set(sessionKey, entry);
   wireEvents(sessionKey, entry);
 
@@ -288,6 +336,7 @@ export async function openSession(
         queue: defaultQueue,
       })),
     ]);
+    entry.advisor.cursor = history.length;
     return { sessionKey, messages: history, state: sessionState };
   }
 
@@ -307,19 +356,31 @@ export async function closeSession(sessionKey: string): Promise<void> {
   const e = pool.get(sessionKey);
   if (!e) return;
   pool.delete(sessionKey);
-  await e.client.stop().catch(() => {});
+  await Promise.all([
+    e.client.stop().catch(() => {}),
+    resetAdvisor(e.advisor),
+  ]);
 }
 
 export async function sendPrompt(sessionKey: string, text: string): Promise<void> {
-  await runCommand(sessionKey, (e) => e.client.prompt(text));
+  await runCommand(sessionKey, (e) => {
+    noteUserTurn(e.advisor);
+    return e.client.prompt(text);
+  });
 }
 
 export async function steer(sessionKey: string, text: string): Promise<void> {
-  await runCommand(sessionKey, (e) => e.client.steer(text));
+  await runCommand(sessionKey, (e) => {
+    noteUserTurn(e.advisor);
+    return e.client.steer(text);
+  });
 }
 
 export async function followUp(sessionKey: string, text: string): Promise<void> {
-  await runCommand(sessionKey, (e) => e.client.followUp(text));
+  await runCommand(sessionKey, (e) => {
+    noteUserTurn(e.advisor);
+    return e.client.followUp(text);
+  });
 }
 
 export async function abortSession(sessionKey: string): Promise<void> {
@@ -403,7 +464,10 @@ export async function forkSession(sessionKey: string, entryId: string): Promise<
   return runCommand(sessionKey, async (e) => {
     const result = await e.client.fork(entryId);
     if (result.cancelled) { const s = await state(e); return { cancelled: true, messages: [], thinkingLevel: s.thinkingLevel, mode: s.mode }; }
-    return replacementState(e);
+    await resetAdvisor(e.advisor);
+    const replacement = await replacementState(e);
+    e.advisor.cursor = replacement.messages.length;
+    return replacement;
   });
 }
 
@@ -411,7 +475,10 @@ export async function cloneSession(sessionKey: string): Promise<SessionReplaceme
   return runCommand(sessionKey, async (e) => {
     const result = await e.client.clone();
     if (result.cancelled) { const s = await state(e); return { cancelled: true, messages: [], thinkingLevel: s.thinkingLevel, mode: s.mode }; }
-    return replacementState(e);
+    await resetAdvisor(e.advisor);
+    const replacement = await replacementState(e);
+    e.advisor.cursor = replacement.messages.length;
+    return replacement;
   });
 }
 
@@ -436,7 +503,10 @@ export async function deleteSession(sessionPath: string): Promise<void> {
   for (const [key, entry] of pool) {
     if (entry.sessionPath === sessionPath) {
       pool.delete(key);
-      await entry.client.stop().catch(() => {});
+      await Promise.all([
+        entry.client.stop().catch(() => {}),
+        resetAdvisor(entry.advisor),
+      ]);
     }
   }
   if (!(await trashFile(sessionPath))) await unlink(sessionPath);

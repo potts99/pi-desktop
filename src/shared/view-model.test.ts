@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toSessionRows, relativeTime } from "./view-model.ts";
+import { parseAdvisory, toSessionRows, relativeTime } from "./view-model.ts";
 import type { SessionInfo } from "@earendil-works/pi-coding-agent";
 
 function info(over: Partial<SessionInfo>): SessionInfo {
@@ -44,5 +44,22 @@ describe("relativeTime", () => {
     expect(relativeTime(new Date(now.getTime() - 5 * 60_000), now)).toBe("5m");
     expect(relativeTime(new Date(now.getTime() - 3 * 3_600_000), now)).toBe("3h");
     expect(relativeTime(new Date(now.getTime() - 2 * 86_400_000), now)).toBe("2d");
+  });
+});
+
+describe("parseAdvisory", () => {
+  it("parses advisory wrappers", () => {
+    expect(parseAdvisory("<advisory severity=\"concern\" guidance=\"weigh\">Check this</advisory>")).toEqual({
+      severity: "concern",
+      body: "Check this",
+    });
+  });
+
+  it("ignores normal messages and unescapes bodies", () => {
+    expect(parseAdvisory("normal user text")).toBeNull();
+    expect(parseAdvisory("<advisory severity=\"blocker\">Use &lt;x&gt; &amp; y &quot;now&quot;</advisory>")).toEqual({
+      severity: "blocker",
+      body: "Use <x> & y \"now\"",
+    });
   });
 });

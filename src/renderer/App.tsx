@@ -139,12 +139,12 @@ export default function App() {
               onAddWorkspace={s.addWorkspace}
               onRemoveWorkspace={s.removeWorkspace}
               onOpen={(path) => s.openSession({ path })}
-              onNew={(cwd) => s.openSession({ newIn: cwd })}
+              onNew={s.startNewThread}
               onTogglePin={togglePin}
               onOpenSettings={() => setSettingsOpen(true)}
             />
           )}
-          <div className="main-pane">
+          <div className={`main-pane${s.newThread ? " new-thread-pane" : ""}`}>
             <div className="topbar" onDoubleClick={async () => { const m = await window.pi.isMaximized(); m ? window.pi.unmaximizeWindow() : window.pi.maximizeWindow(); }}>
               <div className="top-actions">
                 <button onClick={() => setSidebarOpen((v) => !v)} title="Toggle sidebar (\u2318B)">
@@ -188,7 +188,32 @@ export default function App() {
                 {s.error && <button onClick={s.clearError}>Dismiss</button>}
               </div>
             )}
-            {s.opening ? (
+            {s.newThread ? (
+              <div className="new-thread-state">
+                <InputBar
+                  centered
+                  disabled={!s.newThreadCwd}
+                  streaming={false}
+                  models={s.models}
+                  activeModel={s.activeModel}
+                  cwd={s.newThreadCwd}
+                  thinkingLevel={s.thinkingLevel}
+                  thinkingLevels={s.thinkingLevels}
+                  queue={s.queue}
+                  workspaces={s.groups}
+                  selectedWorkspace={s.newThreadCwd ?? ""}
+                  branches={s.newThreadBranches}
+                  selectedBranch={s.newThreadBranch}
+                  onWorkspace={s.setNewThreadCwd}
+                  onBranch={s.setNewThreadBranch}
+                  onSend={s.send}
+                  onStop={s.abort}
+                  onModel={s.setModel}
+                  onThinking={s.setThinkingLevel}
+                  onCycleThinking={s.cycleThinking}
+                />
+              </div>
+            ) : s.opening ? (
               <div className="empty-state">
                 <PISpinner />
                 <div className="empty-sub">Opening agent…</div>
@@ -201,21 +226,23 @@ export default function App() {
                 <div className="empty-sub">Pick an agent on the left, or start a New Agent.</div>
               </div>
             )}
-            <InputBar
-              disabled={!s.activeKey}
-              streaming={s.streaming}
-              models={s.models}
-              activeModel={s.activeModel}
-              cwd={s.groups.find((g) => g.sessions.some((r) => r.path === s.activePath))?.path ?? null}
-              thinkingLevel={s.thinkingLevel}
-              thinkingLevels={s.thinkingLevels}
-              queue={s.queue}
-              onSend={s.send}
-              onStop={s.abort}
-              onModel={s.setModel}
-              onThinking={s.setThinkingLevel}
-              onCycleThinking={s.cycleThinking}
-            />
+            {!s.newThread && (
+              <InputBar
+                disabled={!s.activeKey}
+                streaming={s.streaming}
+                models={s.models}
+                activeModel={s.activeModel}
+                cwd={s.activeCwd}
+                thinkingLevel={s.thinkingLevel}
+                thinkingLevels={s.thinkingLevels}
+                queue={s.queue}
+                onSend={s.send}
+                onStop={s.abort}
+                onModel={s.setModel}
+                onThinking={s.setThinkingLevel}
+                onCycleThinking={s.cycleThinking}
+              />
+            )}
           </div>
         </div>
       )}

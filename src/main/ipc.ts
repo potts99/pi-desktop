@@ -1,6 +1,7 @@
-import { exec } from "node:child_process";
-import { getDesktopConfig, updateDesktopConfig } from "./desktop-config.ts";
+import { exec, execFile } from "node:child_process";
 import { getSettings, updateSettings } from "./settings-store.ts";
+import { getAdvisorConfig, updateAdvisorConfig } from "./advisor-store.ts";
+import { getSystemPrompt, updateSystemPrompt } from "./system-prompt-store.ts";
 
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import type { FSWatcher } from "node:fs";
@@ -8,6 +9,18 @@ import { listWorkspaces, addWorkspace, removeWorkspace } from "./workspaces.ts";
 import { listSessions, listWorkspaceFiles, sessionDirFor, watchDir } from "./sessions.ts";
 import { getPinned, togglePin } from "./pinned.ts";
 import * as rt from "./session-runtime.ts";
+
+function git(cwd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("git", ["-C", cwd, ...args], (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || error.message));
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+}
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
   const emit = (sessionKey: string, ev: unknown) =>
@@ -63,10 +76,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("renameSession", (_e, key: string, name: string) => rt.renameSession(key, name));
   ipcMain.handle("deleteSession", (_e, sessionPath: string) => rt.deleteSession(sessionPath));
   ipcMain.handle("listWorkspaceFiles", (_e, cwd: string, prefix: string) => listWorkspaceFiles(cwd, prefix));
+  ipcMain.handle("listGitBranches", async (_e, cwd: string) => {
+    const [current, branchList] = await Promise.all([
+      git(cwd, ["branch", "--show-current"]).catch(() => ""),
+      git(cwd, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).catch(() => ""),
+    ]);
+    return { current: current || null, branches: branchList.split("\n").filter(Boolean) };
+  });
+  ipcMain.handle("checkoutGitBranch", async (_e, cwd: string, branch: string) => {
+    await git(cwd, ["checkout", branch]);
+  });
   ipcMain.handle("getLastAssistantText", (_e, key: string) => rt.getLastAssistantText(key));
   ipcMain.handle("getSettings", () => getSettings());
-  ipcMain.handle("getDesktopConfig", () => getDesktopConfig());
-  ipcMain.handle("updateDesktopConfig", (_e, partial) => updateDesktopConfig(partial));
+  ipcMain.handle("getAdvisorConfig", () => getAdvisorConfig());
+  ipcMain.handle("updateAdvisorConfig", (_e, partial) => updateAdvisorConfig(partial));
+  ipcMain.handle("getSystemPrompt", () => getSystemPrompt());
+  ipcMain.handle("updateSystemPrompt", (_e, systemPrompt: string) => updateSystemPrompt(systemPrompt));
   ipcMain.handle("updateSettings", (_e, partial) => updateSettings(partial));
   ipcMain.handle("getSessionStats", (_e, key: string) => rt.getSessionStats(key));
   ipcMain.handle("getPinned", () => getPinned());

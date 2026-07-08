@@ -10,6 +10,7 @@ import type {
   SessionStatsInfo,
   ThinkingLevel,
   SessionReplacement,
+  GitBranchInfo,
 } from "../../shared/types.ts";
 
 const emptyQueue: QueueState = { steering: [], followUp: [] };
@@ -43,10 +44,11 @@ function mergeMessage(messages: TranscriptMessage[], next: TranscriptMessage): T
   return [...messages, next];
 }
 
-function freshTab(sessionKey: string, sessionPath: string | null): TabState {
+function freshTab(sessionKey: string, sessionPath: string | null, cwd: string | null): TabState {
   return {
     sessionKey,
     sessionPath,
+    cwd,
     messages: [],
     streamingText: "",
     streaming: false,
@@ -67,6 +69,12 @@ export function useSessions() {
   const [activeIdx, setActiveIdx] = useState(-1);
   const [opening, setOpening] = useState(false);
   const [defaultModels, setDefaultModels] = useState<ModelChoice[]>([]);
+  const [newThread, setNewThread] = useState(false);
+  const [newThreadCwd, setNewThreadCwd] = useState<string | null>(null);
+  const [gitBranches, setGitBranches] = useState<GitBranchInfo>({ current: null, branches: [] });
+  const [newThreadBranch, setNewThreadBranch] = useState("");
+  const [newThreadError, setNewThreadError] = useState<string | null>(null);
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
   const lastSendRef = useRef<{ text: string; mode: "prompt" | "steer" | "followUp" } | null>(null);
   const tabsRef = useRef(tabs);
@@ -74,7 +82,7 @@ export function useSessions() {
   const activeIdxRef = useRef(activeIdx);
   activeIdxRef.current = activeIdx;
 
-  const activeKey = tabs[activeIdx]?.sessionKey ?? null;
+  const activeKey = newThread ? null : tabs[activeIdx]?.sessionKey ?? null;
 
   /** Apply an update to the tab with the given session key. */
   function patchTab(key: string, fn: (t: TabState) => TabState) {
@@ -110,6 +118,24 @@ export function useSessions() {
 
   useEffect(() => { refreshWorkspaces(); }, [refreshWorkspaces]);
   useEffect(() => window.pi?.onSessionsChanged(() => refreshWorkspaces()), [refreshWorkspaces]);
+
+  useEffect(() => {
+    if (!window.pi || !newThreadCwd) {
+      setGitBranches({ current: null, branches: [] });
+      setNewThreadBranch("");
+      return;
+    }
+
+    let cancelled = false;
+    void window.pi.listGitBranches(newThreadCwd).then((info) => {
+      if (cancelled) return;
+      setGitBranches(info);
+      setNewThreadBranch(info.current ?? info.branches[0] ?? "");
+    }).catch(() => {
+      if (!cancelled) setGitBranches({ current: null, branches: [] });
+    });
+    return () => { cancelled = true; };
+  }, [newThreadCwd]);
   // ponytail: pre-fetch models once at mount so freshly-opened tabs show the full picker
   // immediately. Shared list is the superset; default model is fallback only when empty.
   useEffect(() => {
@@ -164,7 +190,10 @@ export function useSessions() {
     }), []);
 
   function activateTab(idx: number) {
-    if (idx >= 0 && idx < tabsRef.current.length) setActiveIdx(idx);
+    if (idx >= 0 && idx < tabsRef.current.length) {
+      setNewThread(false);
+      setActiveIdx(idx);
+    }
   }
 
   function closeTab(idx: number) {
@@ -190,37 +219,69 @@ export function useSessions() {
   }
 
   const openSession = useCallback(async (arg: { path: string } | { newIn: string }) => {
-    if (!window.pi) return;
+    if (!window.pi) return null;
     const sessionPath = "path" in arg ? arg.path : null;
 
     // Reuse existing tab if this session is already open.
     const existing = tabsRef.current.findIndex((t) => t.sessionPath === sessionPath && sessionPath !== null);
-    if (existing >= 0) { setActiveIdx(existing); return; }
+    if (existing >= 0) {
+      setNewThread(false);
+      setActiveIdx(existing);
+      return tabsRef.current[existing].sessionKey;
+    }
 
     setOpening(true);
-    const { sessionKey, messages: history, state } = await window.pi.openSession(arg);
-    const tab = freshTab(sessionKey, state.sessionPath ?? sessionPath);
-    tab.messages = history ?? [];
-    tab.streaming = state.isStreaming;
-    tab.thinkingLevel = state.thinkingLevel;
-    tab.mode = state.mode;
-    tab.queue = state.queue;
-    tab.activeModel = state.model ?? null;
+    setGlobalError(null);
+    try {
+      const cwd = "newIn" in arg ? arg.newIn : groups.find((g) => g.sessions.some((s) => s.path === arg.path))?.path ?? null;
+      const openArg = "newIn" in arg ? arg : { ...arg, cwd: cwd ?? undefined };
+      const { sessionKey, messages: history, state } = await window.pi.openSession(openArg);
+      const tab = freshTab(sessionKey, state.sessionPath ?? sessionPath, cwd);
+      tab.messages = history ?? [];
+      tab.streaming = state.isStreaming;
+      tab.thinkingLevel = state.thinkingLevel;
+      tab.mode = state.mode;
+      tab.queue = state.queue;
+      tab.activeModel = state.model ?? null;
 
-    setTabs((prev) => [...prev, tab]);
-    setActiveIdx((prev) => (prev >= 0 ? prev : 0)); // stays on current, or lands on first
-    // Need fresh index after setTabs — use length as the new tab's index.
-    const newIdx = tabsRef.current.length;
-    setActiveIdx(newIdx);
-    setOpening(false);
+      setTabs((prev) => [...prev, tab]);
+      setNewThread(false);
+      setActiveIdx((prev) => (prev >= 0 ? prev : 0));
+      const newIdx = tabsRef.current.length;
+      setActiveIdx(newIdx);
 
-    void window.pi.getModels(sessionKey).then((m) => patchTab(sessionKey, (t) => ({ ...t, models: m }))).catch(() => {});
-    refreshStats(sessionKey);
-  }, []);
+      void window.pi.getModels(sessionKey).then((m) => patchTab(sessionKey, (t) => ({ ...t, models: m }))).catch(() => {});
+      refreshStats(sessionKey);
+      return sessionKey;
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : String(err));
+      return null;
+    } finally {
+      setOpening(false);
+    }
+  }, [groups]);
 
   const send = useCallback(async (text: string, mode: "prompt" | "steer" | "followUp" = "prompt") => {
+    if (!window.pi) return;
+
+    if (newThread) {
+      const cwd = newThreadCwd ?? groups[0]?.path;
+      if (!cwd) return;
+      try {
+        if (newThreadBranch && newThreadBranch !== gitBranches.current) {
+          await window.pi.checkoutGitBranch(cwd, newThreadBranch);
+        }
+        const sessionKey = await openSession({ newIn: cwd });
+        if (sessionKey) await window.pi.sendPrompt(sessionKey, text, "prompt");
+      } catch (err) {
+        setOpening(false);
+        setNewThreadError(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
     const key = tabsRef.current[activeIdxRef.current]?.sessionKey;
-    if (!key || !window.pi) return;
+    if (!key) return;
     patchTab(key, (t) => ({ ...t, streaming: true, error: null }));
     lastSendRef.current = { text, mode };
     try {
@@ -228,7 +289,7 @@ export function useSessions() {
     } catch (err) {
       patchTab(key, (t) => ({ ...t, streaming: false, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, []);
+  }, [gitBranches.current, groups, newThread, newThreadBranch, newThreadCwd, openSession]);
 
   const retryLast = useCallback(() => {
     const last = lastSendRef.current;
@@ -351,16 +412,28 @@ export function useSessions() {
     }
   }, [refreshWorkspaces]);
 
+  const startNewThread = useCallback((cwd: string) => {
+    setNewThreadCwd(cwd);
+    setNewThreadError(null);
+    setNewThread(true);
+  }, []);
+
   const newAgent = useCallback(async () => {
     if (!window.pi) return;
-    if (groups.length === 0) { await window.pi.addWorkspace(); await refreshWorkspaces(); return; }
+    if (groups.length === 0) {
+      const paths = await window.pi.addWorkspace();
+      await refreshWorkspaces();
+      if (paths[0]) startNewThread(paths[0]);
+      return;
+    }
     const tab = tabsRef.current[activeIdxRef.current];
-    const activeGroup = tab?.sessionPath
-      ? groups.find((g) => g.sessions.some((s) => s.path === tab.sessionPath))
-      : undefined;
-    const cwd = activeGroup?.path ?? groups[0].path;
-    await openSession({ newIn: cwd });
-  }, [groups, openSession, refreshWorkspaces]);
+    const activeGroup = tab?.cwd
+      ? groups.find((g) => g.path === tab.cwd)
+      : tab?.sessionPath
+        ? groups.find((g) => g.sessions.some((s) => s.path === tab.sessionPath))
+        : undefined;
+    startNewThread(activeGroup?.path ?? groups[0].path);
+  }, [groups, refreshWorkspaces, startNewThread]);
 
   const addWorkspace = useCallback(async () => {
     if (!window.pi) return;
@@ -375,28 +448,42 @@ export function useSessions() {
   }, [refreshWorkspaces]);
 
   // Derived from active tab
-  const tab = tabs[activeIdx];
+  const tab = newThread ? undefined : tabs[activeIdx];
   const activePath = tab?.sessionPath ?? null;
   const messages = tab?.messages ?? [];
   const streamingText = tab?.streamingText ?? "";
   const streaming = tab?.streaming ?? false;
-  const models = tab ? (tab.models.length > 0 ? tab.models : defaultModels) : defaultModels;
+  const discoveredModels = tabs.flatMap((openTab) => openTab.models);
+  const models = tab
+    ? (tab.models.length > 0 ? tab.models : defaultModels)
+    : [...defaultModels, ...discoveredModels].filter((model, index, allModels) =>
+      allModels.findIndex((candidate) => candidate.provider === model.provider && candidate.id === model.id) === index,
+    );
   const thinkingLevel = tab?.thinkingLevel ?? "medium";
   const mode = tab?.mode ?? "normal";
   const queue = tab?.queue ?? emptyQueue;
   const retry = tab?.retry ?? { active: false };
   const stats: SessionStatsInfo | null = tab?.stats ?? null;
-  const error = tab?.error ?? null;
+  const error = newThread ? newThreadError : tab?.error ?? globalError ?? null;
 
   const activeModel = tab?.activeModel ?? null;
+  const activeCwd = newThread ? (newThreadCwd ?? groups[0]?.path ?? null) : tab?.cwd ?? null;
 
   const activeTitle = activePath
     ? groups.flatMap((g) => g.sessions).find((s) => s.path === activePath)?.title ?? "Session"
     : activeKey ? "New Agent" : null;
 
   const clearError = useCallback(() => {
+    if (newThread) {
+      setNewThreadError(null);
+      return;
+    }
+    if (globalError) {
+      setGlobalError(null);
+      return;
+    }
     if (activeKey) patchTab(activeKey, (t) => ({ ...t, error: null }));
-  }, [activeKey]);
+  }, [activeKey, newThread, globalError]);
 
   return {
     groups,
@@ -406,6 +493,13 @@ export function useSessions() {
     activePath,
     activeTitle,
     activeModel,
+    activeCwd,
+    newThread,
+    newThreadCwd: activeCwd,
+    newThreadBranches: gitBranches.branches,
+    newThreadBranch,
+    setNewThreadCwd,
+    setNewThreadBranch,
     opening,
     messages,
     streamingText,
@@ -431,6 +525,7 @@ export function useSessions() {
     rename,
     remove,
     newAgent,
+    startNewThread,
     addWorkspace,
     removeWorkspace,
     closeTab,

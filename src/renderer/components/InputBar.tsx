@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import type { ModelChoice, QueueState, ThinkingLevel } from "../../shared/types.ts";
+import type { ModelChoice, QueueState, ThinkingLevel, WorkspaceGroup } from "../../shared/types.ts";
 
 const maxTextareaHeight = 240;
 
@@ -31,6 +31,13 @@ export function InputBar({
   thinkingLevel,
   thinkingLevels,
   queue,
+  centered = false,
+  workspaces = [],
+  selectedWorkspace = "",
+  branches = [],
+  selectedBranch = "",
+  onWorkspace,
+  onBranch,
   onSend,
   onStop,
   onModel,
@@ -45,6 +52,13 @@ export function InputBar({
   thinkingLevel: ThinkingLevel;
   thinkingLevels: ThinkingLevel[];
   queue: QueueState;
+  centered?: boolean;
+  workspaces?: WorkspaceGroup[];
+  selectedWorkspace?: string;
+  branches?: string[];
+  selectedBranch?: string;
+  onWorkspace?: (cwd: string) => void;
+  onBranch?: (branch: string) => void;
   onSend: (text: string, mode: "prompt" | "steer" | "followUp") => void;
   onStop: () => void;
   onModel: (provider: string, id: string) => void;
@@ -252,7 +266,31 @@ export function InputBar({
   const showStop = streaming && !text.trim();
 
   return (
-    <div className="composer-wrap">
+    <div className={`composer-wrap${centered ? " composer-wrap-centered" : ""}`}>
+      {(workspaces.length > 0 || branches.length > 0) && (
+        <div className="composer-context-row">
+          {workspaces.length > 0 && (
+            <select
+              className="context-picker workspace-picker"
+              value={selectedWorkspace}
+              onChange={(event) => onWorkspace?.(event.target.value)}
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.path} value={workspace.path}>{workspace.name}</option>
+              ))}
+            </select>
+          )}
+          {branches.length > 0 && (
+            <select
+              className="context-picker branch-picker"
+              value={selectedBranch}
+              onChange={(event) => onBranch?.(event.target.value)}
+            >
+              {branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+            </select>
+          )}
+        </div>
+      )}
       {pendingCount > 0 && (
         <div className="queue-strip">
           <span>{queue.steering.length} steer</span>

@@ -32,9 +32,22 @@ export interface ModelChoice {
   id: string;
 }
 
+export interface GitBranchInfo {
+  current: string | null;
+  branches: string[];
+}
+
 export type AgentMode = "normal" | "agent" | "yolo" | "manual";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export interface AdvisorConfig {
+  enabled: boolean;
+  model: ModelChoice | null;
+  thinkingLevel: ThinkingLevel;
+  instructions: string;
+  maxConsecutive: number;
+}
 
 export interface QueueState {
   steering: string[];
@@ -81,6 +94,7 @@ export interface SessionStatsInfo {
 export interface TabState {
   sessionKey: string;
   sessionPath: string | null;
+  cwd: string | null;
   messages: TranscriptMessage[];
   streamingText: string;
   streaming: boolean;
@@ -111,7 +125,9 @@ export interface Api {
   removeWorkspace(path: string): Promise<string[]>;     // removes workspace, returns new list
   listSessions(workspacePath: string): Promise<SessionRow[]>;
   listWorkspaceFiles(cwd: string, prefix: string): Promise<string[]>;
-  openSession(arg: { path: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }>;
+  listGitBranches(cwd: string): Promise<GitBranchInfo>;
+  checkoutGitBranch(cwd: string, branch: string): Promise<void>;
+  openSession(arg: { path: string; cwd?: string } | { newIn: string }): Promise<{ sessionKey: string; messages: TranscriptMessage[]; state: SessionState }>;
   closeSession(sessionKey: string): Promise<void>;
   sendPrompt(sessionKey: string, text: string, mode?: "prompt" | "steer" | "followUp"): Promise<void>;
   abortSession(sessionKey: string): Promise<void>;
@@ -135,8 +151,10 @@ export interface Api {
   unmaximizeWindow(): Promise<void>;
   getPinned(): Promise<string[]>;
   getSettings(): Promise<Record<string, unknown>>;
-  getDesktopConfig(): Promise<Record<string, unknown>>;
-  updateDesktopConfig(partial: Record<string, unknown>): Promise<Record<string, unknown>>;
+  getAdvisorConfig(): Promise<AdvisorConfig>;
+  updateAdvisorConfig(partial: Partial<AdvisorConfig>): Promise<AdvisorConfig>;
+  getSystemPrompt(): Promise<string>;
+  updateSystemPrompt(systemPrompt: string): Promise<string>;
   updateSettings(partial: Record<string, unknown>): Promise<Record<string, unknown>>;
   togglePin(sessionPath: string): Promise<string[]>;
   isMaximized(): Promise<boolean>;

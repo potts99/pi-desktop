@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { TranscriptMessage } from "../../shared/types.ts";
+import { parseAdvisory } from "../../shared/view-model.ts";
 import { DiffViewer } from "./DiffViewer.tsx";
 
 export function MessageBlocks({
@@ -13,6 +14,21 @@ export function MessageBlocks({
   isStreaming?: boolean;
   onFork?: (entryId: string) => void;
 }) {
+  const advisory = msg.blocks.length === 1 && msg.blocks[0].kind === "text"
+    ? parseAdvisory(msg.blocks[0].text)
+    : null;
+
+  if (advisory) {
+    return (
+      <div className="msg-wrap">
+        <div className={`msg msg-advisor msg-advisor-${advisory.severity}`}>
+          <div className="advisor-label">Advisor · {advisory.severity}</div>
+          <div className="advisor-body"><Markdown remarkPlugins={[remarkGfm]}>{advisory.body}</Markdown></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="msg-wrap">
       <div className={`msg msg-${msg.role}`}>

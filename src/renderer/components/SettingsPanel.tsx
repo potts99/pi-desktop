@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import type { AdvisorConfig, ModelChoice, ThinkingLevel } from "../../shared/types.ts";
 
 interface SettingField {
   key: string;
   label: string;
   description: string;
-  type: "text" | "select" | "toggle" | "number" | "textarea";
+  type: "text" | "select" | "toggle" | "number" | "textarea" | "array";
   options?: { value: string; label: string; group?: string }[];
   placeholder?: string;
 }
@@ -40,6 +41,7 @@ const pages: SettingsPage[] = [
       { key: "hideThinkingBlock", label: "Hide thinking", description: "Collapse thinking blocks by default", type: "toggle" },
       { key: "collapseChangelog", label: "Collapse changelog", description: "Collapse changelog on startup", type: "toggle" },
       { key: "quietStartup", label: "Quiet startup", description: "Skip welcome message on startup", type: "toggle" },
+      { key: "showHardwareCursor", label: "Hardware cursor", description: "Use hardware text cursor in TUI", type: "toggle" },
     ],
   },
   {
@@ -60,15 +62,74 @@ const pages: SettingsPage[] = [
         key: "defaultProjectTrust", label: "Project trust", description: "Default trust for new projects", type: "select",
         options: [{ value: "ask", label: "Ask" }, { value: "always", label: "Always" }, { value: "never", label: "Never" }],
       },
+      {
+        key: "doubleEscapeAction", label: "Double escape", description: "Action on double-escape in TUI", type: "select",
+        options: [{ value: "quit", label: "Quit" }, { value: "close-agent", label: "Close agent" }],
+      },
+      {
+        key: "treeFilterMode", label: "Tree filter", description: "@-mention tree filter mode", type: "select",
+        options: [{ value: "fuzzy", label: "Fuzzy" }, { value: "prefix", label: "Prefix" }],
+      },
+      { key: "autocompleteMaxVisible", label: "Autocomplete items", description: "Max visible autocomplete entries", type: "number", placeholder: "8" },
+    ],
+  },
+  {
+    id: "editor",
+    title: "Editor",
+    fields: [
+      { key: "externalEditor", label: "External editor", description: "Command to open external editor (e.g. 'code --wait')", type: "text", placeholder: "code --wait" },
+      { key: "editorPaddingX", label: "Editor padding", description: "Horizontal padding in editor", type: "number", placeholder: "0" },
+    ],
+  },
+  {
+    id: "shell",
+    title: "Shell",
+    fields: [
+      { key: "shellPath", label: "Shell path", description: "Path to shell executable", type: "text", placeholder: "/bin/zsh" },
+      { key: "shellCommandPrefix", label: "Shell prefix", description: "Prefix prepended to shell commands", type: "text", placeholder: "source ~/.zshrc && " },
+      { key: "npmCommand", label: "npm command", description: "npm command(s) space-separated", type: "array", placeholder: "npm" },
+      { key: "outputPad", label: "Output padding", description: "Lines of padding after command output", type: "number", placeholder: "1" },
+    ],
+  },
+  {
+    id: "advanced",
+    title: "Advanced",
+    fields: [
+      { key: "transport", label: "Transport", description: "Agent transport protocol", type: "select", options: [{ value: "stdio", label: "stdio" }, { value: "http", label: "HTTP" }] },
+      { key: "httpProxy", label: "HTTP proxy", description: "Proxy URL for agent HTTP transport", type: "text", placeholder: "http://localhost:8080" },
+      { key: "sessionDir", label: "Session directory", description: "Override default session storage path", type: "text", placeholder: "~/.pi/agent/sessions" },
+      { key: "httpIdleTimeoutMs", label: "HTTP idle timeout", description: "Idle timeout in milliseconds for HTTP transport", type: "number", placeholder: "300000" },
+      { key: "websocketConnectTimeoutMs", label: "WebSocket timeout", description: "WebSocket connect timeout in milliseconds", type: "number", placeholder: "10000" },
     ],
   },
   { id: "models", title: "Models" },
+  { id: "advisor", title: "Advisor" },
   { id: "system-prompt", title: "System Prompt" },
 ];
 
+const defaultAdvisorConfig: AdvisorConfig = {
+  enabled: false,
+  model: null,
+  thinkingLevel: "medium",
+  instructions: "",
+  maxConsecutive: 3,
+};
+
+const thinkingOptions: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
+
+function modelKey(model: ModelChoice | null): string {
+  return model ? `${model.provider}/${model.id}` : "";
+}
+
+function modelFromKey(value: string): ModelChoice | null {
+  const separator = value.indexOf("/");
+  if (separator < 1) return null;
+  return { provider: value.slice(0, separator), id: value.slice(separator + 1) };
+}
+
 export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => void; activeSessionKey?: string }) {
   const [settings, setSettings] = useState<Record<string, unknown>>({});
-  const [desktopConfig, setDesktopConfig] = useState<Record<string, unknown>>({});
+  const [advisorConfig, setAdvisorConfig] = useState<AdvisorConfig>(defaultAdvisorConfig);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -77,10 +138,8 @@ export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => vo
 
   useEffect(() => {
     window.pi?.getSettings().then(setSettings).catch(() => {});
-    window.pi?.getDesktopConfig().then((cfg) => {
-      setDesktopConfig(cfg);
-      setSystemPrompt(String(cfg.systemPrompt ?? ""));
-    }).catch(() => {});
+    window.pi?.getAdvisorConfig().then(setAdvisorConfig).catch(() => {});
+    window.pi?.getSystemPrompt?.().then(setSystemPrompt).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -100,6 +159,32 @@ export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => vo
       setSaving(false);
     }
   }, []);
+
+  const updateAdvisor = useCallback(async (partial: Partial<AdvisorConfig>) => {
+    setAdvisorConfig((current) => ({ ...current, ...partial }));
+    setSaving(true);
+    try {
+      const savedConfig = await window.pi.updateAdvisorConfig(partial);
+      setAdvisorConfig(savedConfig);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const saveSystemPrompt = useCallback(async () => {
+    if (!window.pi?.updateSystemPrompt) return;
+    setSaving(true);
+    try {
+      const savedSystemPrompt = await window.pi.updateSystemPrompt(systemPrompt);
+      setSystemPrompt(savedSystemPrompt);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } finally {
+      setSaving(false);
+    }
+  }, [systemPrompt]);
 
   const renderField = (f: SettingField) => {
     const val = settings[f.key];
@@ -137,6 +222,11 @@ export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => vo
       }
       case "number":
         return <input className="settings-input" type="number" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, Number(e.target.value))} />;
+      case "array": {
+        const arr = Array.isArray(val) ? val : [];
+        const text = arr.join(" ");
+        return <input className="settings-input" type="text" value={text} placeholder={f.placeholder} onChange={(e) => update(f.key, e.target.value.split(/\s+/).filter(Boolean))} />;
+      }
       default:
         return <input className="settings-input" type="text" value={String(val ?? "")} placeholder={f.placeholder} onChange={(e) => update(f.key, e.target.value)} />;
     }
@@ -234,23 +324,90 @@ export function SettingsPanel({ onClose, activeSessionKey }: { onClose: () => vo
               ))}
             </div>
           )}
+          {activePage === "advisor" && (
+            <div className="settings-section">
+              <h3 className="settings-section-title">Advisor</h3>
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">Enable advisor</span>
+                  <span className="settings-desc">Review every worker turn and inject concise guidance.</span>
+                </div>
+                <div className="settings-control">
+                  <label className="settings-toggle">
+                    <input type="checkbox" checked={advisorConfig.enabled} onChange={(event) => void updateAdvisor({ enabled: event.target.checked })} />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">Advisor model</span>
+                  <span className="settings-desc">Usually a stronger model than the worker.</span>
+                </div>
+                <div className="settings-control">
+                  <select className="settings-select" value={modelKey(advisorConfig.model)} onChange={(event) => void updateAdvisor({ model: modelFromKey(event.target.value) })}>
+                    <option value="">Select model</option>
+                    {sharedModels.map((model) => {
+                      const key = modelKey(model);
+                      return <option key={key} value={key}>{model.provider}/{model.id}</option>;
+                    })}
+                  </select>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">Advisor thinking</span>
+                  <span className="settings-desc">Reasoning budget for advisor reviews.</span>
+                </div>
+                <div className="settings-control">
+                  <select className="settings-select" value={advisorConfig.thinkingLevel} onChange={(event) => void updateAdvisor({ thinkingLevel: event.target.value as ThinkingLevel })}>
+                    {thinkingOptions.map((level) => <option key={level} value={level}>{level}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">Max consecutive advisories</span>
+                  <span className="settings-desc">Stops advisor/worker ping-pong without user input.</span>
+                </div>
+                <div className="settings-control">
+                  <input className="settings-input" type="number" min={1} value={advisorConfig.maxConsecutive} onChange={(event) => void updateAdvisor({ maxConsecutive: Number(event.target.value) })} />
+                </div>
+              </div>
+              <div className="settings-row system-prompt-row">
+                <div className="settings-info" style={{ width: "100%" }}>
+                  <span className="settings-label">Advisor instructions</span>
+                  <span className="settings-desc">Project review priorities, like a desktop-level WATCHDOG.md.</span>
+                  <textarea
+                    className="settings-textarea"
+                    value={advisorConfig.instructions}
+                    placeholder="e.g. Watch for unsafe renderer output, missing tests, and over-engineered abstractions."
+                    onChange={(event) => setAdvisorConfig((current) => ({ ...current, instructions: event.target.value }))}
+                    onBlur={() => void updateAdvisor({ instructions: advisorConfig.instructions })}
+                    rows={5}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           {activePage === "system-prompt" && (
             <div className="settings-section">
               <h3 className="settings-section-title">System Prompt</h3>
               <div className="settings-row system-prompt-row">
                 <div className="settings-info" style={{ width: "100%" }}>
                   <span className="settings-label">Custom system prompt</span>
-                  <span className="settings-desc">Appended to every new agent session via --append-system-prompt. Existing sessions are unaffected.</span>
+                  <span className="settings-desc">Saved to ~/.pi/agent/SYSTEM.md. New sessions use it as Pi's system prompt override.</span>
                   <textarea
                     className="settings-textarea"
                     value={systemPrompt}
                     placeholder="e.g. You are an expert TypeScript developer. Always use strict mode."
                     onChange={(e) => setSystemPrompt(e.target.value)}
                     onBlur={() => {
-                      void window.pi?.updateDesktopConfig({ systemPrompt: systemPrompt || undefined }).then(setDesktopConfig).catch(() => {});
+                      void saveSystemPrompt();
                     }}
                     rows={5}
                   />
+                  <button className="settings-button" onClick={() => void saveSystemPrompt()}>Save</button>
                 </div>
               </div>
             </div>
