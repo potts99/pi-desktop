@@ -482,7 +482,9 @@ export function InputBar({
 								</div>
 							) : slashError ? (
 								<div className="popup-item">
-									<span className="popup-desc">Slash commands unavailable: {slashError}</span>
+									<span className="popup-desc">
+										Slash commands unavailable: {slashError}
+									</span>
 								</div>
 							) : filteredSlash.length === 0 ? (
 								<div className="popup-item">

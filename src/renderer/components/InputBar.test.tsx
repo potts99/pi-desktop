@@ -1,5 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { InputBar } from "./InputBar.tsx";
 
 const baseProps = {
@@ -15,6 +21,11 @@ const baseProps = {
 	onThinking: vi.fn(),
 	onCycleThinking: vi.fn(),
 };
+
+afterEach(() => {
+	cleanup();
+	Reflect.deleteProperty(window, "pi");
+});
 
 function installPi(
 	commands: Array<{ id: string; label: string; description: string }>,
@@ -104,6 +115,32 @@ describe("InputBar slash commands", () => {
 		expect(
 			await screen.findByText("No skill or prompt commands found"),
 		).toBeTruthy();
+	});
+
+	it("falls through to submit instead of crashing when Enter is pressed on an empty popup", async () => {
+		const pi = installPi([]);
+		const onSend = vi.fn();
+		const { container } = render(
+			<InputBar
+				{...baseProps}
+				models={[]}
+				activeModel={null}
+				onModel={vi.fn()}
+				onSend={onSend}
+			/>,
+		);
+		const textarea = container.querySelector("textarea")!;
+
+		await waitFor(() => expect(pi.listSlashCommands).toHaveBeenCalled());
+		fireEvent.change(textarea, { target: { value: "/", selectionStart: 1 } });
+		expect(
+			await screen.findByText("No skill or prompt commands found"),
+		).toBeTruthy();
+
+		// Enter while the popup is empty must not call applySlash(undefined).
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		expect(onSend).toHaveBeenCalledWith("/", "prompt");
 	});
 });
 

@@ -11,8 +11,7 @@ import {
 import type { MetricsRunRecord } from "../shared/types.ts";
 
 function record(over: Partial<MetricsRunRecord>): MetricsRunRecord {
-	const has = (key: keyof MetricsRunRecord) =>
-		Object.hasOwn(over, key);
+	const has = (key: keyof MetricsRunRecord) => Object.hasOwn(over, key);
 	return {
 		id: over.id ?? Math.random().toString(36),
 		source: over.source ?? "observed",
@@ -81,7 +80,9 @@ describe("metrics aggregation", () => {
 		expect(summary.projectRows[0].topModelKey).toBe("openai/gpt-5");
 		expect(summary.modelRows[0].modelKey).toBe("openai/gpt-5");
 		expect(summary.advisorRows[0].severityCounts.concern).toBe(1);
-		expect(summary.heatmapCells.some((cell) => cell.day === "2026-07-01")).toBe(true);
+		expect(summary.heatmapCells.some((cell) => cell.day === "2026-07-01")).toBe(
+			true,
+		);
 		// week-aligned: the grid starts on the Sunday before the first activity day
 		expect(summary.heatmapCells[0].day).toBe("2026-06-28");
 		expect(new Date(summary.heatmapCells[0].day).getDay()).toBe(0);
@@ -100,7 +101,12 @@ describe("metrics aggregation", () => {
 					day: "2026-07-02",
 				}),
 			],
-			{ from: "2026-07-02", projectPath: "/repo/b", modelKey: "m/b", actor: "advisor" },
+			{
+				from: "2026-07-02",
+				projectPath: "/repo/b",
+				modelKey: "m/b",
+				actor: "advisor",
+			},
 		);
 
 		expect(summary.records.map((item) => item.id)).toEqual(["r2"]);
@@ -187,8 +193,16 @@ describe("metric record builders", () => {
 			mode: "normal",
 			requestMode: "prompt",
 			status: "completed",
-			before: { tokens: { input: 10, output: 20, total: 30 }, cost: 1, toolCalls: 1 },
-			after: { tokens: { input: 30, output: 70, total: 100 }, cost: 1.25, toolCalls: 3 },
+			before: {
+				tokens: { input: 10, output: 20, total: 30 },
+				cost: 1,
+				toolCalls: 1,
+			},
+			after: {
+				tokens: { input: 30, output: 70, total: 100 },
+				cost: 1.25,
+				toolCalls: 3,
+			},
 		});
 
 		expect(built.tokens.output).toBe(50);

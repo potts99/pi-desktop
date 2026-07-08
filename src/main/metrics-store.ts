@@ -788,11 +788,16 @@ function heatmapRange(
 	const trailingSunday = dayOffset(end, -weekdayOf(end));
 	const weekFloor = dayOffset(trailingSunday, -(52 * 7));
 	const first = existing[0];
-	const start = !first || first < weekFloor
-		? weekFloor
-		: dayOffset(first, -weekdayOf(first));
+	const start =
+		!first || first < weekFloor
+			? weekFloor
+			: dayOffset(first, -weekdayOf(first));
 	const days: string[] = [];
-	for (let cursor = start; cursor <= end && days.length < 372; cursor = dayOffset(cursor, 1)) {
+	for (
+		let cursor = start;
+		cursor <= end && days.length < 372;
+		cursor = dayOffset(cursor, 1)
+	) {
 		days.push(cursor);
 	}
 	if (records.length === 0 && days.length === 0) return [];
