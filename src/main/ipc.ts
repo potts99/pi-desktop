@@ -2,6 +2,7 @@ import { exec, execFile } from "node:child_process";
 import { getSettings, updateSettings } from "./settings-store.ts";
 import { getAdvisorConfig, updateAdvisorConfig } from "./advisor-store.ts";
 import { getSystemPrompt, updateSystemPrompt } from "./system-prompt-store.ts";
+import { getMetricsSummary, refreshMetricsBackfill } from "./metrics-store.ts";
 
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import type { FSWatcher } from "node:fs";
@@ -65,6 +66,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return rt.sendPrompt(key, text);
   });
   ipcMain.handle("abortSession", (_e, key: string) => rt.abortSession(key));
+  ipcMain.handle("respondToUiRequest", (_e, key: string, response) => rt.respondToUiRequest(key, response));
   ipcMain.handle("getModels", (_e, key: string) => rt.getModels(key));
   ipcMain.handle("setModel", (_e, key: string, provider: string, id: string) => rt.setModel(key, provider, id));
   ipcMain.handle("getSessionState", (_e, key: string) => rt.getSessionState(key));
@@ -94,6 +96,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("updateSystemPrompt", (_e, systemPrompt: string) => updateSystemPrompt(systemPrompt));
   ipcMain.handle("updateSettings", (_e, partial) => updateSettings(partial));
   ipcMain.handle("getSessionStats", (_e, key: string) => rt.getSessionStats(key));
+  ipcMain.handle("getMetricsSummary", (_e, filter) => getMetricsSummary(filter));
+  ipcMain.handle("refreshMetricsBackfill", (_e, filter) => refreshMetricsBackfill(filter));
   ipcMain.handle("getPinned", () => getPinned());
   ipcMain.handle("togglePin", (_e, path: string) => togglePin(path));
   ipcMain.handle("closeWindow", () => { getWindow()?.close(); });
