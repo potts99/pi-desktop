@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AdvisorConfig } from "../shared/types.ts";
 import {
@@ -15,7 +15,7 @@ import {
 	type WorkerClient,
 } from "./advisor-runtime.ts";
 
-function entry(role: AgentMessage["role"], text: string): SessionEntry {
+function entry(role: "user" | "assistant", text: string): SessionEntry {
 	return {
 		type: "message",
 		message: { role, content: text },

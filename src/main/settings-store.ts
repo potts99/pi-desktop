@@ -62,7 +62,6 @@ export async function getSettings(): Promise<PiSettings> {
 export async function updateSettings(partial: Partial<PiSettings>): Promise<PiSettings> {
   const current = await getSettings();
   const merged = { ...current, ...partial };
-  // Remove undefined keys
   for (const key of Object.keys(merged)) {
     if (merged[key as keyof PiSettings] === undefined) {
       delete merged[key as keyof PiSettings];

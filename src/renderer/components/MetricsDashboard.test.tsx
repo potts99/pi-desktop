@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MetricsDashboard } from "./MetricsDashboard.tsx";
-import type { MetricsSummary } from "../../shared/types.ts";
+import type { Api, MetricsSummary } from "../../shared/types.ts";
 
 function summary(over: Partial<MetricsSummary> = {}): MetricsSummary {
 	const tokens = {
@@ -95,13 +95,15 @@ function summary(over: Partial<MetricsSummary> = {}): MetricsSummary {
 }
 
 beforeEach(() => {
-	(globalThis as any).window = (globalThis as any).window || {};
-	(globalThis as any).window.pi = {
-		getMetricsSummary: vi.fn(async () => summary()),
-		refreshMetricsBackfill: vi.fn(async () =>
-			summary({ totals: { ...summary().totals, runs: 2 } }),
-		),
-	};
+	Object.defineProperty(window, "pi", {
+		configurable: true,
+		value: {
+			getMetricsSummary: vi.fn(async () => summary()),
+			refreshMetricsBackfill: vi.fn(async () =>
+				summary({ totals: { ...summary().totals, runs: 2 } }),
+			),
+		} satisfies Partial<Api>,
+	});
 });
 
 afterEach(() => {

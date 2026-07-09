@@ -82,7 +82,20 @@ describe("expandSkillCommand", () => {
 		const dir = await mkdtemp(join(tmpdir(), "pi-skill-"));
 		const file = join(dir, "SKILL.md");
 		await writeFile(file, "---\nname: demo\n---\nDo the thing.", "utf-8");
-		const skill = { name: "demo", filePath: file } as unknown as Skill;
+		const skill: Skill = {
+			name: "demo",
+			description: "",
+			filePath: file,
+			baseDir: dir,
+			sourceInfo: {
+				path: file,
+				source: "test",
+				scope: "temporary",
+				origin: "top-level",
+				baseDir: dir,
+			},
+			disableModelInvocation: false,
+		};
 
 		const out = await expandSkillCommand("/skill:demo fast", [skill]);
 

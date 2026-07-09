@@ -4,6 +4,7 @@ import type {
 	SessionEvent,
 	SessionState,
 	TranscriptMessage,
+	Api,
 } from "../../shared/types.ts";
 import { useSessions } from "./useSessions.ts";
 
@@ -30,13 +31,19 @@ function installMockPi() {
 	let eventCb: EventCb | null = null;
 	let counter = 0;
 
-	const pi: any = {
+	const pi: Partial<Api> = {
 		listWorkspaces: async () => [],
 		listSessions: async () => [],
 		getSettings: async () => ({}),
 		getModels: async () => [],
 		getSharedModels: async () => [],
-		getSessionStats: async () => null,
+		getSessionStats: async () => ({
+			sessionId: "test",
+			userMessages: 0,
+			assistantMessages: 0,
+			totalMessages: 0,
+			tokens: { input: 0, output: 0, total: 0 },
+		}),
 		listGitBranches: async () => ({ current: null, branches: [] }),
 		onSessionEvent: (cb: EventCb) => {
 			eventCb = cb;
@@ -69,7 +76,10 @@ function installMockPi() {
 		},
 	};
 
-	(globalThis as any).window.pi = pi;
+	Object.defineProperty(window, "pi", {
+		configurable: true,
+		value: pi,
+	});
 
 	return {
 		pi,
@@ -79,8 +89,10 @@ function installMockPi() {
 }
 
 beforeEach(() => {
-	(globalThis as any).window = (globalThis as any).window || {};
-	(globalThis as any).window.pi = undefined;
+	Object.defineProperty(window, "pi", {
+		configurable: true,
+		value: undefined,
+	});
 	installMockPi();
 });
 
@@ -194,7 +206,6 @@ describe("useSessions workingStartedAt", () => {
 			await result.current.openSession({ path: "/s/a.jsonl" });
 		});
 
-		const key = result.current.tabs[0].sessionKey;
 		await act(async () => {
 			await result.current.send("hello");
 		});

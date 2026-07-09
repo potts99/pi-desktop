@@ -261,7 +261,6 @@ export function InputBar({
 		const cursor = ta.selectionStart;
 		const before = value.slice(0, cursor);
 
-		// Check for slash command
 		const slashMatch = before.match(/(?:^|\s)\/(\S*)$/);
 		if (slashMatch && !mentionActive) {
 			const filterText = slashMatch[1];
@@ -273,7 +272,6 @@ export function InputBar({
 			return;
 		}
 
-		// Check for @mention
 		const mentionMatch = before.match(/(?:^|\s)@(\S*)$/);
 		if (mentionMatch) {
 			const filterText = mentionMatch[1];
@@ -291,7 +289,6 @@ export function InputBar({
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
-		// Slash popup key handling
 		if (slashActive && filteredSlash.length > 0) {
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
